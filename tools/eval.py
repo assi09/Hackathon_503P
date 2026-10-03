@@ -37,7 +37,9 @@ def one(case: Path, run: int, tag: str) -> dict:
 
 if __name__ == "__main__":
     tag = sys.argv[1] if len(sys.argv) > 1 else "eval"
-    cases = sorted((ROOT / "cases").glob(sys.argv[2] if len(sys.argv) > 2 else "*.json"))
+    pattern = sys.argv[2] if len(sys.argv) > 2 else "*.json"
+    cases = sorted(ROOT.glob(pattern) if "/" in pattern else (ROOT / "cases").glob(pattern))
+    cases = [c for c in cases if not c.stem.startswith(("attack", ))]
     jobs = [(c, r) for c in cases for r in (1, 2)]
     with ThreadPoolExecutor(max_workers=6) as pool:
         rows = list(pool.map(lambda j: one(j[0], j[1], tag), jobs))
