@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import random
+import time
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -21,8 +22,12 @@ except Exception:  # pragma: no cover - only if the wheel is unavailable
 
 PARAM_TYPES = {"number", "toggle", "select", "vector", "matrix"}
 VIEW_TYPES = {"pipeline", "bars", "heatmap", "table", "readout", "sweep", "curve", "svg"}
-FORBIDDEN = re.compile(r"\b(fetch|XMLHttpRequest|importScripts|require|eval|Function|document|window|"
-                       r"localStorage|Math\.random|setTimeout|setInterval)\b|\bimport\s*\(")
+FORBIDDEN = re.compile(r"\b(fetch|XMLHttpRequest|WebSocket|EventSource|importScripts|eval|Function|constructor|"
+                       r"document|window|globalThis|navigator|localStorage|sessionStorage|indexedDB|Worker|"
+                       r"postMessage|Math\.random|setTimeout|setInterval)\b|\bimport\s*\(|https?:|javascript:")
+UNSAFE_SVG = re.compile(r"<\s*(script|foreignObject|iframe|image|use|a|style)\b|\son\w+\s*=|href\s*=|url\s*\(", re.I)
+JS_LIMITS = {"timeout_sec": 8, "max_memory": 256 * 1024 * 1024}
+MAX_COMPUTE_MS = 10.0
 IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 HARNESS = r"""
@@ -69,10 +74,17 @@ function evaluate(states) {
              keys: Object.keys(out.r), sig: JSON.stringify(out.r).slice(0, 20000) };
   }));
 }
+function numbersOver(states) {
+  var out = [];
+  function walk(v) { if (typeof v === "number" && isFinite(v)) out.push(v); else if (Array.isArray(v)) v.forEach(walk);
+                     else if (v && typeof v === "object") for (var k in v) walk(v[k]); }
+  states.forEach(function (s) { try { var st = normalizeShapes(Object.assign(defaults(), clone(s))); walk(st); walk(__explainer.compute(clone(st))); } catch (e) {} });
+  return JSON.stringify(out);
+}
 function resultOf(s) { var st = normalizeShapes(Object.assign(defaults(), clone(s))); return JSON.stringify(__explainer.compute(clone(st))); }
 function drawAll(s) {
   var st = normalizeShapes(Object.assign(defaults(), clone(s))); var r = __explainer.compute(clone(st)); var out = {};
-  for (var id in __explainer.draw) { try { out[id] = String(__explainer.draw[id](clone(st), r)).slice(0, 300); } catch (e) { out[id] = "error: " + e.message; } }
+  for (var id in __explainer.draw) { try { out[id] = String(__explainer.draw[id](clone(st), r)).slice(0, 200000); } catch (e) { out[id] = "error: " + e.message; } }
   return JSON.stringify(out);
 }
 """
@@ -223,12 +235,43 @@ def check_structure(spec: dict, rep: Report) -> None:
         rep.errors.append("missing misconception.text")
     code = spec["compute"] + " ".join(str(c.get("test", "")) + str(c.get("show", "")) for c in spec.get("checks", [])) \
         + " ".join(str(v.get("code", "")) for v in spec["views"])
-    m = FORBIDDEN.search(code)
+    m = FORBIDDEN.search(re.sub(r"https?://www\.w3\.org/[\w/.#-]*", "", code))  # SVG namespaces are fine
     if m:
         rep.errors.append(f"generated code uses forbidden API {m.group(0)!r}")
     for e in spec.get("equations", []) + [{"latex": s.get("symbol", "")} for s in spec["symbols"]]:
         if e.get("latex") and not latex_ok(e["latex"]):
             rep.warnings.append(f"LaTeX not convertible: {e['latex'][:60]}")
+
+
+_CITE = re.compile(r"\b(Eqs?\.|Equations?|Algorithm|Theorem|Lemma|Definition|Proposition|Corollary|Figure|Fig\.|Table)"
+                   r"\s*((?:\(?\d+(?:\.\d+)?\)?\s*(?:[-–,]|and|&)?\s*)+)", re.I)
+
+
+def check_citations(spec: dict, excerpt: str | None, rep: Report) -> None:
+    """Every numbered equation/algorithm/theorem/figure/table the page attributes to the paper must appear in the
+    source text we read. (Skipped when the source was unavailable.)"""
+    if not excerpt:
+        return
+    g, paper = spec.get("grounding", {}), spec.get("paper", {})
+    cited = " ".join([str(paper.get("section", "")), str(paper.get("equation", ""))]
+                     + [str(x) for x in g.get("from_paper", [])]
+                     + [str(e.get("caption", "")) for e in spec.get("equations", [])])
+    missing = []
+    for kind, nums in _CITE.findall(cited):
+        k = kind.lower()
+        for n in re.findall(r"\d+(?:\.\d+)?", nums):
+            if k.startswith(("eq", "equation")):
+                found = re.search(rf"\(\s*{re.escape(n)}\s*\)\s*$", excerpt, re.M)  # an equation tag ends its line
+            else:
+                label = "fig(?:ure|\\.)" if k.startswith("fig") else re.escape(k.rstrip("s"))
+                found = re.search(rf"\b{label}\s*{re.escape(n)}\b", excerpt, re.I)
+            if not found:
+                missing.append(f"{kind} {n}")
+    if missing:
+        rep.errors.append(f"citations {sorted(set(missing))} do not appear in the source excerpt; cite only numbers "
+                          "that appear there, otherwise describe the location (e.g. 'unnumbered equation in "
+                          "Section 3.5') in paper, grounding and equation captions")
+    rep.stats["citations_checked"] = len(_CITE.findall(cited))
 
 
 def check_grounding(spec: dict, excerpt: str | None, rep: Report) -> None:
@@ -339,7 +382,10 @@ def check_view_shapes(spec: dict, r: dict, rep: Report) -> None:
     for v in spec["views"]:
         t = v.get("type")
         if t == "bars":
-            for srs in v.get("series") or ([{"key": v["values"]}] if v.get("values") else []):
+            series = v.get("series") or ([{"key": v["values"]}] if v.get("values") else [])
+            if series and all(_is_num(get(srs.get("key"))) for srs in series):
+                continue  # one bar per single-number key
+            for srs in series:
                 need(v, srs.get("key"), "numbers")
         elif t == "heatmap":
             need(v, v.get("value"), "matrix")
@@ -355,6 +401,76 @@ def check_view_shapes(spec: dict, r: dict, rep: Report) -> None:
                 need(v, c.get("key"), "cells")
 
 
+NUM = re.compile(r"(?<![A-Za-z_^])[-−]?\d+(?:\.\d+)?(?:e[-−]?\d+)?")
+
+
+def _numbers(text: str) -> list[tuple[str, float]]:
+    out = []
+    # Inside $math$, drop sub/superscripts (x_4, \sigma^2, 10^{-3}) but keep stated values (\sigma^2 = 11.5).
+    text = re.sub(r"\$([^$]*)\$", lambda m: " " + re.sub(r"[_^](\{[^{}]*\}|\\?\w)", " ", m.group(1)) + " ", text)
+    text = re.sub(r"\\[A-Za-z]+", " ", text)
+    for m in NUM.finditer(text):
+        tok = m.group(0).replace("−", "-")
+        try:
+            out.append((tok, float(tok)))
+        except ValueError:
+            pass
+    return out
+
+
+def _supported(tok: str, x: float, pool: list[float]) -> bool:
+    if abs(x) <= 10 and float(x).is_integer():
+        return True  # counts, indices, small integers (n = 4, p_t = 1, ...)
+    decimals = len(tok.split(".")[1].split("e")[0]) if "." in tok else 0
+    tol = max(0.5 * 10 ** -decimals, 1e-9) + 0.011 * abs(x)
+    return any(abs(v - x) <= tol or abs(abs(v) - abs(x)) <= tol for v in pool)
+
+
+def _round(v: Any) -> Any:
+    if isinstance(v, list):
+        return [_round(x) for x in v]
+    return float(f"{v:.4g}") if isinstance(v, float) else v
+
+
+def check_exploration_numbers(spec: dict, ctx: Any, rep: Report) -> None:
+    """Accuracy: precise values an exploration tells the learner to observe must be reachable by compute()
+    from its preset (allowing the learner to move any one control, as 'change' instructs)."""
+    states: list[dict] = [{}]
+    for e in spec["explorations"]:
+        preset = e.get("preset") or {}
+        states.append(preset)
+        for p in spec["params"]:
+            if p.get("type") == "number":
+                lo, hi, step = p["min"], p["max"], p.get("step") or 0
+                n = min(41, int(round((hi - lo) / step)) + 1) if step else 41
+                states += [{**preset, p["id"]: lo + (hi - lo) * k / max(1, n - 1)} for k in range(n)]
+            elif p.get("type") == "toggle":
+                states.append({**preset, p["id"]: not preset.get(p["id"], p.get("default"))})
+            elif p.get("type") == "select":
+                states += [{**preset, p["id"]: o.get("value")} for o in p.get("options", [])]
+    try:
+        pool = json.loads(ctx.call("numbersOver", states, **JS_LIMITS))
+    except Exception:
+        return
+    pool += [x for _, x in _numbers(json.dumps(spec.get("equations", [])) + json.dumps(spec["params"]))]
+    for i, e in enumerate(spec["explorations"]):
+        bad = [tok for tok, x in _numbers(e.get("observe", "")) + _numbers(e.get("why", ""))
+               if "." in tok and not _supported(tok, x, pool)]
+        if bad:
+            try:
+                actual = json.loads(ctx.call("resultOf", e.get("preset") or {}, **JS_LIMITS))
+            except Exception:
+                actual = {}
+            shown = {k: _round(v) for k, v in actual.items() if isinstance(v, (int, float, list)) and not isinstance(v, bool)
+                     and len(json.dumps(v)) < 300}
+            rep.errors.append(f"exploration {i + 1} ('{e.get('title')}') states {bad}, but compute() does not produce "
+                              f"these values from its preset. compute() at this preset actually returns "
+                              f"{json.dumps(shown)[:900]}. Rewrite 'observe'/'why' using these values, and if the "
+                              "preset does not demonstrate the claim, fix the preset")
+    rep.stats["exploration_numbers_checked"] = sum(
+        len([t for t, _ in _numbers(e.get("observe", "") + " " + e.get("why", "")) if "." in t]) for e in spec["explorations"])
+
+
 def check_execution(spec: dict, rep: Report) -> None:
     if MiniRacer is None:
         rep.warnings.append("JS engine unavailable; executable checks skipped")
@@ -362,7 +478,8 @@ def check_execution(spec: dict, rep: Report) -> None:
     ctx = MiniRacer()
     client = {"params": spec["params"]}
     try:
-        ctx.eval(HARNESS % json.dumps(client) + "\n" + code_bundle(spec).replace("window.__explainer", "var __explainer"))
+        ctx.eval(HARNESS % json.dumps(client) + "\n" + code_bundle(spec).replace("window.__explainer", "var __explainer"),
+                 **JS_LIMITS)
     except Exception as exc:
         rep.errors.append(f"JavaScript does not load (syntax error?): {str(exc)[:300]}")
         return
@@ -390,7 +507,9 @@ def check_execution(spec: dict, rep: Report) -> None:
     named += [(f"check '{c['name']}'", c["params"]) for c in fixed]
 
     try:
-        results = json.loads(ctx.call("evaluate", [s for _, s in named], timeout=8000))
+        t0 = time.perf_counter()
+        results = json.loads(ctx.call("evaluate", [s for _, s in named], **JS_LIMITS))
+        per_call_ms = (time.perf_counter() - t0) * 1000 / max(1, len(named))
     except Exception as exc:
         rep.errors.append(f"compute() timed out or crashed the engine: {str(exc)[:200]}")
         return
@@ -425,18 +544,25 @@ def check_execution(spec: dict, rep: Report) -> None:
         if p is None:
             continue
         lo = v.get("x_min", p.get("min", 0)); hi = v.get("x_max", p.get("max", 1))
+        step = p.get("step") or 0
         for k in range(11):
             x = lo + (hi - lo) * k / 10
+            if step:  # the page only ever sweeps values on the control's step grid
+                x = min(hi, max(lo, round(round((x - lo) / step) * step + lo, 10)))
             if p["type"] == "vector":
                 vec = list(p["default"]); vec[min(len(vec) - 1, int(v.get("x_index") or 0))] = x
                 sweep_states.append({p["id"]: vec})
             else:
                 sweep_states.append({p["id"]: x})
     if sweep_states:
-        for st, res in zip(sweep_states, json.loads(ctx.call("evaluate", sweep_states, timeout=8000))):
+        for st, res in zip(sweep_states, json.loads(ctx.call("evaluate", sweep_states, **JS_LIMITS))):
             if not res.get("ok") or res.get("nonfinite"):
                 rep.errors.append(f"sweep inputs {json.dumps(st)[:160]} break compute(): {res.get('error') or res.get('nonfinite')}")
                 break
+    rep.stats["compute_ms"] = round(per_call_ms, 3)
+    if per_call_ms > MAX_COMPUTE_MS:
+        rep.errors.append(f"compute() is too slow ({per_call_ms:.1f} ms per call); the page re-runs it for every "
+                          "control change and sweep point, so keep it under a few milliseconds (small loops only)")
     rep.stats.update(states_tested=len(named), check_evaluations=total, check_passes=passed)
 
     # Every view must find its data on defaults and presets.
@@ -453,7 +579,8 @@ def check_execution(spec: dict, rep: Report) -> None:
             missing = [r for r in refs if r and r not in keys]
             if missing:
                 rep.errors.append(f"view '{v.get('title')}' ({v.get('type')}) reads keys not returned by compute: {missing}")
-        check_view_shapes(spec, json.loads(ctx.call("resultOf", {})), rep)
+        check_view_shapes(spec, json.loads(ctx.call("resultOf", {}, **JS_LIMITS)), rep)
+        check_exploration_numbers(spec, ctx, rep)
         # Controls must matter: changing each one should change the result.
         effective = 0
         for p in spec["params"]:
@@ -475,7 +602,7 @@ def check_execution(spec: dict, rep: Report) -> None:
             if alt is None:
                 continue
             try:
-                if ctx.call("resultOf", {}) != ctx.call("resultOf", {p["id"]: alt}):
+                if ctx.call("resultOf", {}, **JS_LIMITS) != ctx.call("resultOf", {p["id"]: alt}, **JS_LIMITS):
                     effective += 1
                 else:
                     rep.warnings.append(f"control '{p['id']}' does not change any result")
@@ -485,9 +612,11 @@ def check_execution(spec: dict, rep: Report) -> None:
         if effective < 2:
             rep.errors.append("fewer than two controls change the computed results")
         try:
-            draws = json.loads(ctx.call("drawAll", {}))
+            draws = json.loads(ctx.call("drawAll", {}, **JS_LIMITS))
             for vid, out in draws.items():
-                if not re.match(r"\s*<svg[\s>]", out, re.I):
+                if UNSAFE_SVG.search(out):
+                    rep.errors.append(f"svg view {vid} draw() output contains scripts, links or external references")
+                elif not re.match(r"\s*<svg[\s>]", out, re.I):
                     rep.errors.append(f"svg view {vid} draw() must return an <svg> string, got: {out[:120]}")
         except Exception as exc:
             rep.errors.append(f"svg draw failed: {str(exc)[:150]}")
@@ -502,5 +631,6 @@ def validate(spec: dict, excerpt: str | None) -> Report:
     if any(e.startswith(("missing or invalid field", "param ")) for e in rep.errors):
         return rep  # cannot build inputs for compute(); nothing executable to test yet
     check_grounding(spec, excerpt, rep)
+    check_citations(spec, excerpt, rep)
     check_execution(spec, rep)
     return rep

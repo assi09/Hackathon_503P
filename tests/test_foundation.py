@@ -55,6 +55,24 @@ class SpecTests(unittest.TestCase):
         bad["checks"][1]["test"] = "Math.abs(r.mean - 2.6) < 1e-9"
         self.assertTrue(any("fails" in e for e in validate(bad, None).errors))
 
+    def test_compute_may_use_helper_functions_and_other_forms(self):
+        core = FIXTURE["compute"].replace("function compute(p)", "function core(p)", 1)
+        for code in (core + "\nfunction helper(x) { return x; }\nfunction compute(p) { return core(p); }",
+                     "function (p) { var core = " + core + "; return core(p); }",
+                     "(p) => { var core = " + core + "; return core(p); }"):
+            spec = copy.deepcopy(FIXTURE)
+            spec["compute"] = code
+            self.assertTrue(validate(spec, None).ok, code[:40])
+
+    def test_citation_must_exist_in_source(self):
+        from validate import Report, check_citations
+        excerpt = "Intro.\n$$y = mx + b$$\n(1)\nThe slope m scales x."
+        good = {"paper": {"section": "Section 1", "equation": "Eq. (1)"}, "grounding": {"from_paper": []}}
+        bad = {"paper": {"section": "Section 1", "equation": "Eqs. (1)-(2), Algorithm 3"}, "grounding": {"from_paper": []}}
+        rep = Report(); check_citations(good, excerpt, rep); self.assertEqual(rep.errors, [])
+        rep = Report(); check_citations(bad, excerpt, rep)
+        self.assertTrue(rep.errors and "Eqs. 2" in rep.errors[0] and "Algorithm 3" in rep.errors[0])
+
     def test_unverifiable_quote_is_dropped(self):
         spec = copy.deepcopy(FIXTURE)
         spec["grounding"]["quotes"] = ["A weighted mean averages values by their importance.", "Invented sentence that is not there."]
