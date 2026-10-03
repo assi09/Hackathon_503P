@@ -20,6 +20,7 @@ import requests
 from pypdf import PdfReader
 
 from guard import DeadlineExceeded, run_with_deadline
+from pdfglyphs import page_text
 
 MAX_SOURCE_BYTES = 16 * 1024 * 1024
 MAX_EXCERPT_CHARS = 9_000
@@ -36,6 +37,7 @@ class SourceDocument:
     text: str
     format: str
     origin: str
+    penalty: float = 0.0
 
 
 class _PaperHTMLParser(HTMLParser):
@@ -50,8 +52,21 @@ class _PaperHTMLParser(HTMLParser):
         self.skip_depth = 0
         self.math_depth = 0
         self.parts: list[str] = []
+        self.errors = 0
+        self.tex_script: bool | None = None
+        self.annotation = False
+        self.math_has_alt = False
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        a = dict(attrs)
+        if "ltx_ERROR" in (a.get("class") or ""):
+            self.errors += 1
+        if tag == "script" and (a.get("type") or "").startswith("math/tex") and not self.skip_depth:
+            self.tex_script = "display" in (a.get("type") or "")
+            self.skip_depth = 1
+            return
+        if self.math_depth and tag == "annotation" and "tex" in (a.get("encoding") or "").lower():
+            self.annotation = True
         if self.skip_depth:
             if tag not in ("br", "img", "hr", "input", "meta", "link"):
                 self.skip_depth += 1
@@ -64,6 +79,7 @@ class _PaperHTMLParser(HTMLParser):
             display = dict(attrs).get("display") == "block"
             if alt:
                 self.parts.append(("\n$$" + alt + "$$\n") if display else (" $" + alt + "$ "))
+            self.math_has_alt = bool(alt)
             self.math_depth = 1
         elif tag in self.SKIP:
             self.skip_depth = 1
@@ -71,6 +87,10 @@ class _PaperHTMLParser(HTMLParser):
             self.parts.append("\n")
 
     def handle_endtag(self, tag: str) -> None:
+        if tag == "annotation":
+            self.annotation = False
+        if tag == "script" and self.tex_script is not None:
+            self.tex_script = None
         if self.skip_depth:
             self.skip_depth -= 1
         elif self.math_depth:
@@ -79,6 +99,12 @@ class _PaperHTMLParser(HTMLParser):
             self.parts.append("\n")
 
     def handle_data(self, data: str) -> None:
+        if self.tex_script is not None and self.skip_depth == 1:  # MathJax source: <script type="math/tex">
+            self.parts.append(("\n$$" + data.strip() + "$$\n") if self.tex_script else (" $" + data.strip() + "$ "))
+            return
+        if self.annotation and not self.math_has_alt:  # MathML without alttext: use its TeX annotation
+            self.parts.append(" $" + data.strip() + "$ ")
+            return
         if not self.skip_depth and not self.math_depth:
             self.parts.append(data)
 
@@ -89,19 +115,74 @@ def _clean(text: str) -> str:
 
 
 def _fix_pdf_glyphs(text: str) -> str:
-    """Some PDFs expose glyph names such as /#28 or /; instead of the characters."""
-    text = re.sub(r"/#([0-9A-Fa-f]{2})", lambda m: chr(int(m.group(1), 16)), text)
-    text = text.replace("/!", "→")
-    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "□", text)  # glyphs lost in extraction
-    return re.sub(r"/([=;:,.()<>+\-])", lambda m: {";": ",", ":": "."}.get(m.group(1), m.group(1)), text)
+    """Leftover hex glyph names (/#28 -> '(') after font-aware decoding; control characters become □.
+    A '/' followed by punctuation is NOT rewritten: in most PDFs it is a real division slash."""
+    text = re.sub(r"/#([2-7][0-9A-Fa-f])", lambda m: chr(int(m.group(1), 16)), text)
+    return re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]|/#[01][0-9A-Fa-f]", "□", text)
+
+
+LIGATURES = {"ﬁ": "fi", "ﬂ": "fl", "ﬀ": "ff", "ﬃ": "ffi", "ﬄ": "ffl", "ﬅ": "ft", "ﬆ": "st"}
+
+
+def _repair_text(text: str) -> str:
+    """Generic extraction repairs: ligatures, words hyphenated across lines, UTF-8 read as Latin-1, CID glyphs."""
+    if "â€" in text or "Ã" in text:
+        try:
+            text = text.encode("cp1252", errors="strict").decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            pass
+    for lig, plain in LIGATURES.items():
+        text = text.replace(lig, plain)
+    text = re.sub(r"([a-z])-\n([a-z])", r"\1\2", text)
+    return re.sub(r"\(cid:\d+\)", "⟨?⟩", text)
+
+
+def _strip_running_lines(pages: list[str]) -> list[str]:
+    """Drop running headers/footers (a line repeated on many pages) and bare page numbers."""
+    if len(pages) < 4:
+        return pages
+    counts: dict[str, int] = {}
+    for page in pages:
+        for line in {l.strip() for l in page.splitlines() if len(l.strip()) >= 4}:
+            counts[line] = counts.get(line, 0) + 1
+    repeated = {line for line, n in counts.items() if n >= max(3, 0.3 * len(pages))}
+    return ["\n".join(l for l in page.splitlines()
+                      if l.strip() not in repeated and not re.fullmatch(r"\s*\d{1,4}\s*", l)) for page in pages]
+
+
+def _fix_letter_spacing(text: str) -> str:
+    """Rejoin words a PDF spaced out letter by letter: 'C HANNEL' -> 'CHANNEL', 'T h e s e' -> 'These'."""
+    text = re.sub(r"\b([A-Z]) ([A-Z]{2,})\b", r"\1\2", text)
+    return re.sub(r"\b(?:[A-Za-z] ){3,}[A-Za-z]\b", lambda m: m.group(0).replace(" ", ""), text)
+
+
+GARBLED = re.compile(r"□|⟨\?⟩|\ufffd|[\ue000-\uf8ff]|\(cid:\d+\)|/#[0-9A-Fa-f]{2}|â€")
+
+
+def quality(document: SourceDocument) -> float:
+    """0..1 score of how cleanly the text was extracted: unrecognized symbols, mojibake and letter-spaced runs
+    lower it; LaTeX-preserving extraction (arXiv HTML) raises it."""
+    text = document.text
+    per_k = 1000 / max(1, len(text))
+    garbled = len(GARBLED.findall(text)) * per_k
+    spaced = len(re.findall(r"\b(?:[A-Za-z] ){3,}[A-Za-z]\b", text)) * per_k
+    score = 1.0 - min(0.7, 0.35 * garbled) - min(0.2, 0.1 * spaced) - document.penalty
+    if re.search(r"\$[^$]+\$", text):
+        score += 0.1
+    return round(max(0.0, min(1.0, score)), 3)
+
+
+GOOD_QUALITY = 0.85
 
 
 def _extract(data: bytes, content_type: str, origin: str) -> SourceDocument:
     if data.startswith(b"%PDF-") or "application/pdf" in content_type.lower():
         try:
             reader = PdfReader(io.BytesIO(data))
-            pages = reader.pages[:MAX_PDF_PAGES]
-            text = _clean(_fix_pdf_glyphs("\n".join(page.extract_text() or "" for page in pages)))
+            if reader.is_encrypted:
+                reader.decrypt("")  # many "encrypted" papers only restrict editing, with an empty password
+            pages = _strip_running_lines([page_text(page)[0] for page in reader.pages[:MAX_PDF_PAGES]])
+            text = _clean(_repair_text(_fix_letter_spacing(_fix_pdf_glyphs("\n".join(pages)))))
         except Exception as exc:
             raise SourceError(f"Cannot extract PDF text: {exc}") from exc
         fmt = "pdf"
@@ -109,13 +190,14 @@ def _extract(data: bytes, content_type: str, origin: str) -> SourceDocument:
         try:
             parser = _PaperHTMLParser()
             parser.feed(data.decode("utf-8-sig", errors="replace"))
-            text = _clean("".join(parser.parts))
+            text = _clean(_repair_text("".join(parser.parts)))
+            penalty = min(0.5, 0.05 * parser.errors)  # arXiv HTML conversion failures: prefer the PDF
         except Exception as exc:
             raise SourceError(f"Cannot extract HTML text: {exc}") from exc
         fmt = "html"
     if len(text) < 300:
-        raise SourceError("Source has too little extractable text")
-    return SourceDocument(text=text, format=fmt, origin=origin)
+        raise SourceError("Source has too little extractable text (scanned or image-only document?)")
+    return SourceDocument(text=text, format=fmt, origin=origin, penalty=penalty if fmt == "html" else 0.0)
 
 
 def _candidate_urls(url: str) -> list[str]:
@@ -126,6 +208,8 @@ def _candidate_urls(url: str) -> list[str]:
         if m:
             ident = m.group(2)
             return [f"https://arxiv.org/html/{ident}", f"https://arxiv.org/pdf/{ident}"]
+    if p.scheme == "http":
+        return [url, "https://" + url[len("http://"):]]
     return [url]
 
 
@@ -148,12 +232,17 @@ def load_source(source_url: str) -> SourceDocument:
 def _load_source(source_url: str) -> SourceDocument:
     deadline = time.monotonic() + FETCH_BUDGET_SECONDS
     errors: list[str] = []
+    found: list[SourceDocument] = []
     for url in _candidate_urls(source_url):
         cache = _cache_path(url)
         if cache and cache.exists():
             data = cache.read_bytes()
             ctype = "application/pdf" if data.startswith(b"%PDF-") else "text/html"
-            return _extract(data, ctype, url)
+            doc = _extract(data, ctype, url)
+            found.append(doc)
+            if quality(doc) >= GOOD_QUALITY:
+                return doc
+            continue
         remaining = deadline - time.monotonic()
         if remaining < 1:
             break
@@ -171,9 +260,14 @@ def _load_source(source_url: str) -> SourceDocument:
             if cache:
                 cache.parent.mkdir(parents=True, exist_ok=True)
                 cache.write_bytes(data)
-            return doc
+            found.append(doc)
+            if quality(doc) >= GOOD_QUALITY:
+                return doc
+            errors.append(f"{url}: extraction quality {quality(doc):.2f}, trying the next version")
         except Exception as exc:
             errors.append(f"{url}: {type(exc).__name__}: {str(exc)[:160]}")
+    if found:
+        return max(found, key=quality)
     raise SourceError("; ".join(errors) or "fetch time budget exhausted")
 
 
@@ -181,7 +275,8 @@ _STOP = {"explain", "using", "with", "show", "paper", "section", "change", "valu
          "that", "this", "their", "them", "each", "from", "into", "should", "make", "check", "guide", "through"}
 
 
-_SEC_TOKEN = r"(?:[A-Z](?:\.\d+)+|\d+(?:\.\d+)*|[A-Z](?![A-Za-z]))"
+_SEC_TOKEN = r"(?:[IVX]{1,5}(?![A-Za-z])|[A-Z](?:\.\d+)+|\d+(?:\.\d+)*|[A-Z](?![A-Za-z]))"
+_ROMAN = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8, "IX": 9, "X": 10, "XI": 11, "XII": 12}
 _SECTION_REF = re.compile(rf"(?i:sections?|sec\.|§|appendix)\s*({_SEC_TOKEN}(?:\s*(?:,|and|&)\s*{_SEC_TOKEN})*)")
 _ITEM_REF = re.compile(r"\b(algorithm|theorem|lemma|definition|proposition|corollary|figure|fig\.|table|"
                        r"equations?|eqs?\.)\s*\(?(\d+(?:\.\d+)?)\)?", re.I)
@@ -191,12 +286,26 @@ def _section_numbers(focus: str) -> list[str]:
     nums: list[str] = []
     for m in _SECTION_REF.finditer(focus):
         nums += [n for n in re.findall(_SEC_TOKEN, m.group(1)) if n not in nums]
+    arabic = {v: k for k, v in _ROMAN.items()}
+    for n in list(nums):  # "Section 3" may be headed "III." and "Section III" may be headed "3"
+        if n in _ROMAN and str(_ROMAN[n]) not in nums:
+            nums.append(str(_ROMAN[n]))
+        elif n.isdigit() and int(n) in arabic and arabic[int(n)] not in nums:
+            nums.append(arabic[int(n)])
     return nums
 
 
 def _heading_pos(text: str, num: str, terms: set[str]) -> int | None:
-    pattern = re.compile(rf"^(?:Appendix\s+)?{re.escape(num)}\.?\s+[A-Z][^\n]{{1,90}}$", re.M)
-    hits = [h for h in pattern.finditer(text) if len(h.group(0)) < 110]
+    """Find a section heading such as '3.2.1 Scaled Dot-Product Attention'. Parsers do not always put headings on
+    their own line ('1 IntroductionRecurrent ...'), so a heading may also start mid-line; mentions like
+    'see Section 3.2.1' are ignored."""
+    pattern = re.compile(r"(?<!\w)(?<!\d\.)(?:#+\s*)?(?:Appendix\s+)?" + re.escape(num) + r"\.?\s+[A-Z][A-Za-z]")
+    hits = []
+    for h in pattern.finditer(text):
+        before = text[max(0, h.start() - 12):h.start()].lower().rstrip()
+        if before.endswith(("section", "sections", "sec.", "§", "and", "in", "eq.", "table", "figure", "fig.", "(")):
+            continue
+        hits.append(h)
     if not hits:
         return None
     # A table of contents also lists the heading; prefer the hit followed by focus-relevant prose.
