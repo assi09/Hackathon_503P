@@ -1,0 +1,3 @@
+{"source_url": "http://infolab.stanford.edu/pub/papers/google.pdf",
+ "focus": "Section 2.1.1, Description of PageRank Calculation. Explain the PageRank formula with the damping factor d on a small graph of 3 to 5 pages. Let the learner edit links and change d. Show the iteration converging and the final ranks. Guide them through a page with many incoming links and the effect of d approaching 0 or 1. Check that the ranks form a probability distribution summing to one (note how the paper's normalization differs).",
+ "audience": "Second-year computer engineering undergraduate who knows matrices and basic probability."}

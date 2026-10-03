@@ -1,0 +1,3 @@
+{"source_url": "https://people.math.harvard.edu/~ctm/home/text/others/shannon/entropy/entropy.pdf",
+ "focus": "Part III / Section 25, Theorem 17: capacity of a channel of band W perturbed by white thermal noise, C = W log2((P + N)/N). Explain how bandwidth and signal-to-noise ratio set the maximum error-free rate. Let the learner change bandwidth W, signal power P and noise power N. Show the SNR (linear and in dB), log2(1+SNR), and capacity in bits per second. Guide them through doubling power versus doubling bandwidth, and through very low SNR. Check that capacity is zero when P = 0 and that doubling W doubles C at fixed SNR.",
+ "audience": "Third-year electrical engineering undergraduate who knows logarithms, decibels and basic signals."}

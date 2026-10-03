@@ -1,0 +1,3 @@
+{"source_url": "https://arxiv.org/abs/1412.6980",
+ "focus": "Section 2 and Algorithm 1 (Adam update rule, including bias correction in Section 3). Explain how Adam computes the first and second moment estimates, why bias correction is needed early in training, and how the step size is formed. Let the learner change beta1, beta2, the step number t, and a constant gradient value. Show m_t, v_t, the bias-corrected estimates, and the resulting update. Guide them through the first step with and without bias correction. Check that with a constant gradient g the bias-corrected first moment equals g exactly.",
+ "audience": "Engineering undergraduate who knows gradient descent but has not used adaptive optimizers."}

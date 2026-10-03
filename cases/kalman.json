@@ -1,0 +1,3 @@
+{"source_url": "https://www.cs.unc.edu/~welch/media/pdf/kalman_intro.pdf",
+ "focus": "Section 1, the discrete Kalman filter measurement update (time update and measurement update equations). Explain how the Kalman gain blends a prediction with a noisy measurement for a scalar state. Let the learner change the prior error covariance, the measurement noise variance R, and the measurement. Show the gain, the updated estimate, and the updated error covariance. Guide them through a very noisy sensor and a very precise sensor. Check that the gain stays between 0 and 1 and that the posterior variance never exceeds the prior variance.",
+ "audience": "Third-year electrical engineering undergraduate who knows basic probability and variance."}
