@@ -1,0 +1,5 @@
+{
+  "source_url": "https://arxiv.org/abs/1207.0580",
+  "focus": "Dropout: explain how each hidden unit is kept with probability p during training and how the outgoing weights are scaled by p at test time so the expected input to the next layer matches. Let the learner change the keep probability and a small vector of activations and weights. Show a sampled dropout mask, the training-time input, its expected value, and the test-time scaled input. Guide them through p = 1 (no dropout) and a small p. Check that the expected training-time input equals the test-time scaled input.",
+  "audience": "Engineering undergraduate who has trained a small neural network but has not used regularization."
+}
