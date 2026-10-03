@@ -87,7 +87,10 @@ svg .marker { stroke: #111; stroke-dasharray: 4 3; }
 .step { flex: 1 1 170px; min-width: 0; overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: #fafbfc; }
 .step-label { font-weight: 600; font-size: .9rem; }
 .step-math { margin: 4px 0; overflow-x: auto; }
-.step-value { margin-top: 6px; }
+.step-value { margin-top: 6px; overflow-x: auto; }
+.step .heat td { white-space: nowrap; min-width: 0; padding: 4px 6px; font-size: .82rem; }
+.step .heat th { padding: 2px 4px; }
+.heat td, .data td, .chips span { white-space: nowrap; }
 .step-note { font-size: .8rem; color: var(--muted); margin-top: 6px; }
 .arrow { align-self: center; font-size: 1.4rem; color: var(--muted); }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }

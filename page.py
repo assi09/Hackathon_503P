@@ -93,6 +93,23 @@ def _client_spec(spec: dict) -> dict:
     for raw, p in zip(spec["params"], params):
         p["plain_label"] = plain(raw.get("label", raw["id"]))
     views = walk(spec["views"])
+    by_id = {p["id"]: p for p in spec["params"]}
+    for raw, v in zip(spec["views"], views):
+        if raw.get("type") != "sweep" or raw.get("x_param") not in by_id:
+            continue
+        # The title always names what the curve really varies; the model's own words become the caption.
+        p = by_id[raw["x_param"]]
+        what = rich(p.get("label") or p["id"])
+        idx = raw.get("x_index")
+        if p.get("type") == "vector":
+            what += f" (entry {int(idx or 0) + 1})"
+        elif p.get("type") == "matrix":
+            i, j = (list(idx) + [0, 0])[:2] if isinstance(idx, list) else (0, 0)
+            what += f" (entry {int(i) + 1},{int(j) + 1})"
+        ys = ", ".join(rich(y.get("label") or y.get("key", "")) for y in raw.get("y", []) or []) or "result"
+        model_title = rich(raw.get("title", ""))
+        v["title"] = f"{ys} as {what} varies"
+        v["caption"] = " ".join(x for x in (model_title + ("." if model_title else ""), rich(raw.get("caption", ""))) if x)
     for v in views:
         for step in v.get("steps", []) or []:
             if step.get("latex"):
@@ -157,7 +174,7 @@ def _list(items: list, cls: str = "") -> str:
     return f"<ul class='{cls}'>" + "".join(f"<li>{rich(i)}</li>" for i in items) + "</ul>"
 
 
-def render_page(spec: dict, case: dict, source_note: str) -> str:
+def render_page(spec: dict, case: dict, source_note: str, source_ok: bool = True) -> str:
     css = (TEMPLATES / "style.css").read_text(encoding="utf-8")
     runtime = (TEMPLATES / "runtime.js").read_text(encoding="utf-8")
     paper = spec.get("paper", {})
@@ -190,6 +207,7 @@ def render_page(spec: dict, case: dict, source_note: str) -> str:
     quotes = "".join(f"<blockquote>“{rich(q)}”</blockquote>" for q in g.get("quotes", []))
 
     body = f"""
+{'' if source_ok else '<div class="warn banner" role="note"><strong>Source not available.</strong> ' + html.escape(source_note) + '</div>'}
 <header class="hero">
   <p class="kicker">Interactive explainer · for {html.escape(case['audience'])}</p>
   <h1>{rich(spec.get('title', 'Interactive explanation'))}</h1>

@@ -246,7 +246,15 @@
       r = Object.assign({}, r, { __bars_vals: vals, __bars_labels: labs });
       v = Object.assign({}, v, { series: [{ key: "__bars_vals", label: v.value_label || "" }], labels: "__bars_labels" });
     }
-    var series = seriesList(v).map(function (s) { return { s: s, data: lookup(r, s.key) || [] }; });
+    var series = [];
+    seriesList(v).forEach(function (s) {
+      var d = lookup(r, s.key) || [];
+      if (Array.isArray(d) && Array.isArray(d[0])) {  // a matrix: one series per row
+        d.forEach(function (row, k) { series.push({ s: { key: s.key, label: (s.label || s.key) + " row " + (k + 1) }, data: row }); });
+      } else {
+        series.push({ s: s, data: d });
+      }
+    });
     var n = Math.max.apply(null, series.map(function (x) { return x.data.length; }).concat([0]));
     if (!n) { box.appendChild(el("p", { "class": "muted" }, "No values to show.")); return; }
     var labels = lookup(r, v.labels) || [];
@@ -357,7 +365,7 @@
       var val = lookup(r, it.key);
       g.appendChild(el("div", { "class": "ro" },
         "<div class='ro-label'>" + (it.label || it.key) + "</div><div class='ro-value'>" +
-        (Array.isArray(val) ? valueHTML(val) : fmt(val, it.digits)) + (it.unit ? " <span class='unit'>" + esc(it.unit) + "</span>" : "") +
+        (Array.isArray(val) ? valueHTML(val) : fmt(val, it.digits)) + ((it.unit_key && lookup(r, it.unit_key)) || it.unit ? " <span class='unit'>" + esc((it.unit_key && lookup(r, it.unit_key)) || it.unit) + "</span>" : "") +
         "</div>" + (it.note ? "<div class='ro-note'>" + it.note + "</div>" : "")));
     });
     box.appendChild(g);
@@ -443,23 +451,39 @@
   function sweep(v, r, box) {
     var p = paramById(v.x_param);
     if (!p) return;
-    var idx = p.type === "vector" ? Math.max(0, Math.min(state[p.id].length - 1, v.x_index || 0)) : null;
+    var idx = null, ij = null;
+    if (p.type === "vector") idx = Math.max(0, Math.min(state[p.id].length - 1, v.x_index || 0));
+    if (p.type === "matrix") {
+      var xi = Array.isArray(v.x_index) ? v.x_index : [0, 0];
+      ij = [Math.max(0, Math.min(state[p.id].length - 1, xi[0] || 0)), Math.max(0, Math.min(state[p.id][0].length - 1, xi[1] || 0))];
+    }
     var lo = v.x_min != null ? v.x_min : p.min, hi = v.x_max != null ? v.x_max : p.max;
     var n = p.step && Number.isInteger(p.step) && (hi - lo) / p.step <= 80 ? Math.round((hi - lo) / p.step) + 1 : 81;
     var xs = [], ys = (v.y || []).map(function (y) { return { key: y.key, label: y.label, color: y.color, data: [] }; });
     for (var i = 0; i < n; i++) {
       var x = lo + (hi - lo) * i / (n - 1);
       var st = clone(state);
-      if (idx === null) st[p.id] = x; else st[p.id][idx] = x;
+      if (ij) st[p.id][ij[0]][ij[1]] = x; else if (idx === null) st[p.id] = x; else st[p.id][idx] = x;
       normalizeShapes(st);
       var out;
       try { out = run(st); } catch (e) { out = {}; }
       xs.push(x);
       ys.forEach(function (y) { y.data.push(out[y.key]); });
     }
-    var name = (p.plain_label || p.id) + (idx === null ? "" : " — entry " + (idx + 1));
+    // A y key that returns a list (e.g. one value per query) becomes one line per element.
+    var expanded = [];
+    ys.forEach(function (y) {
+      var first = y.data.filter(Array.isArray)[0];
+      if (!first) { expanded.push(y); return; }
+      first.forEach(function (_, k) {
+        expanded.push({ key: y.key, label: (y.label || y.key) + " [" + (k + 1) + "]", data: y.data.map(function (d) { return Array.isArray(d) ? d[k] : null; }), index: k });
+      });
+    });
+    ys = expanded;
+    var name = (p.plain_label || p.id) + (ij ? " — entry (" + (ij[0] + 1) + "," + (ij[1] + 1) + ")" : idx === null ? "" : " — entry " + (idx + 1));
     linePlot(box, xs, ys, {
-      markerX: idx === null ? state[p.id] : state[p.id][idx], markerY: ys.map(function (y) { return r[y.key]; }),
+      markerX: ij ? state[p.id][ij[0]][ij[1]] : idx === null ? state[p.id] : state[p.id][idx],
+      markerY: ys.map(function (y) { var m = r[y.key]; return y.index != null && Array.isArray(m) ? m[y.index] : m; }),
       x_label: v.x_label || name, y_label: v.y_label, ymin: v.ymin, ymax: v.ymax, include_zero: v.include_zero
     });
     box.appendChild(el("p", { "class": "caption" }, "Curve: every point is recomputed with only " + esc(name) + " changed and all other inputs held at your current settings; the dot marks your current value."));
