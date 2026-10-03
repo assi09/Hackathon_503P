@@ -45,7 +45,10 @@ def check(page_path: Path, shots: Path) -> dict:
             page.screenshot(path=str(shots / f"preset{i + 1}.png"), full_page=False)
             report[f"preset{i + 1}_checks"] = page.locator("#live-checks li").all_inner_texts()
             report[f"preset{i + 1}_warning"] = page.locator("#lab-error").inner_text() if page.locator("#lab-error").is_visible() else ""
-        nan = page.evaluate("document.body.innerText.match(/NaN|undefined|\\[object/g)")
+        # Only places that display computed numbers; prose may legitimately say "NaN" or "undefined".
+        nan = page.evaluate("""Array.from(document.querySelectorAll(
+            '#views svg text, #views td, #views .chips span, #views .big, #views .ro-value, #live-checks .shown'))
+            .map(e => e.textContent).filter(t => /NaN|undefined|\\[object/.test(t))""") or None
         report["bad_text"] = nan
         page.set_viewport_size({"width": 400, "height": 800})
         page.screenshot(path=str(shots / "mobile.png"), full_page=False)
