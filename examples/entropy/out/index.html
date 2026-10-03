@@ -21,6 +21,8 @@ h1 { font-size: clamp(1.7rem, 3.2vw, 2.4rem); margin: 4px 0 10px; }
 h2 { font-size: 1.35rem; margin: 0 0 14px; }
 h3 { font-size: 1.05rem; margin: 18px 0 8px; }
 p { max-width: 80ch; }
+p, li, dd, td, th, figcaption, .caption, .ctl-help, .step-note, .ro-note, .callout, .why, blockquote, .warn { overflow-wrap: anywhere; }
+math { max-width: 100%; overflow-x: auto; }
 a { color: var(--accent); }
 section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 22px 24px; margin-top: 18px; }
 .hero { padding: 8px 4px; }
@@ -92,7 +94,10 @@ svg .marker { stroke: #111; stroke-dasharray: 4 3; }
 .step { flex: 1 1 170px; min-width: 0; overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: #fafbfc; }
 .step-label { font-weight: 600; font-size: .9rem; }
 .step-math { margin: 4px 0; overflow-x: auto; }
-.step-value { margin-top: 6px; }
+.step-value { margin-top: 6px; overflow-x: auto; }
+.step .heat td { white-space: nowrap; min-width: 0; padding: 4px 6px; font-size: .82rem; }
+.step .heat th { padding: 2px 4px; }
+.heat td, .data td, .chips span { white-space: nowrap; }
 .step-note { font-size: .8rem; color: var(--muted); margin-top: 6px; }
 .arrow { align-self: center; font-size: 1.4rem; color: var(--muted); }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -144,20 +149,21 @@ code.tex { background: #f1f3f5; padding: 1px 4px; border-radius: 3px; }
 <body>
 <main>
 
+
 <header class="hero">
   <p class="kicker">Interactive explainer · for Engineering undergraduate who knows basic probability and logarithms but has not studied information theory.</p>
   <h1>Shannon Entropy: Measuring Choice and Uncertainty in Bits</h1>
-  <p class="paper">Source: <a href="https://people.math.harvard.edu/~ctm/home/text/others/shannon/entropy/entropy.pdf">A Mathematical Theory of Communication · C. E. Shannon · 1948</a> — <strong>Section 6, Choice, Uncertainty and Entropy · H = -K Σ p_i log p_i (Theorem 2)</strong></p>
+  <p class="paper">Source: <a href="https://people.math.harvard.edu/~ctm/home/text/others/shannon/entropy/entropy.pdf">A Mathematical Theory of Communication · C. E. Shannon · 1948</a> — <strong>Section 6, Choice, Uncertainty and Entropy · Theorem 2 (unnumbered display equation)</strong></p>
 </header>
 
 <section id="start" aria-labelledby="h-start">
   <h2 id="h-start">1 · Start here</h2>
-  <p class="lead">Given a set of possible events with known probabilities p_1,...,p_n, Shannon asks for a measure of how much 'choice' or uncertainty the selection involves. He requires continuity, monotonicity in n for equal probabilities, and consistency under decomposing a choice into successive choices; the unique such measure is H = -Σ p_i log p_i. With base-2 logarithms H is measured in bits.</p>
-  <div class="why"><h3>Why it matters</h3><p>H is the fundamental limit on how much a source can be compressed and how much information a symbol carries. It also quantifies uncertainty in any probabilistic model, from communication to machine learning.</p></div>
-  <figure class='equation'><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><mrow><mi>H</mi><mo>&#x0003D;</mo><mo>&#x02212;</mo><mi>K</mi><munderover><mo>&#x02211;</mo><mrow><mi>i</mi><mo>&#x0003D;</mo><mn>1</mn></mrow><mrow><mi>n</mi></mrow></munderover><msub><mi>p</mi><mi>i</mi></msub><mi>log</mi><msub><mi>p</mi><mi>i</mi></msub></mrow></math><figcaption>Theorem 2: the only H satisfying Shannon's three requirements; K sets the unit.</figcaption></figure><figure class='equation'><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><mrow><mi>H</mi><mo>&#x0003D;</mo><mo>&#x02212;</mo><munderover><mo>&#x02211;</mo><mrow><mi>i</mi><mo>&#x0003D;</mo><mn>1</mn></mrow><mrow><mi>n</mi></mrow></munderover><msub><mi>p</mi><mi>i</mi></msub><msub><mi>log</mi><mn>2</mn></msub><msub><mi>p</mi><mi>i</mi></msub></mrow></math><figcaption>With K=1 and base-2 logs, H is in bits.</figcaption></figure><figure class='equation'><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><mrow><mi>H</mi><mrow><mo stretchy="true" fence="true" form="prefix">&#x00028;</mo><mstyle displaystyle="false" scriptlevel="0"><mfrac><mrow><mn>1</mn></mrow><mrow><mn>2</mn></mrow></mfrac></mstyle><mo>&#x0002C;</mo><mstyle displaystyle="false" scriptlevel="0"><mfrac><mrow><mn>1</mn></mrow><mrow><mn>3</mn></mrow></mfrac></mstyle><mo>&#x0002C;</mo><mstyle displaystyle="false" scriptlevel="0"><mfrac><mrow><mn>1</mn></mrow><mrow><mn>6</mn></mrow></mfrac></mstyle><mo stretchy="true" fence="true" form="postfix">&#x00029;</mo></mrow><mo>&#x0003D;</mo><mi>H</mi><mrow><mo stretchy="true" fence="true" form="prefix">&#x00028;</mo><mstyle displaystyle="false" scriptlevel="0"><mfrac><mrow><mn>1</mn></mrow><mrow><mn>2</mn></mrow></mfrac></mstyle><mo>&#x0002C;</mo><mstyle displaystyle="false" scriptlevel="0"><mfrac><mrow><mn>1</mn></mrow><mrow><mn>2</mn></mrow></mfrac></mstyle><mo stretchy="true" fence="true" form="postfix">&#x00029;</mo></mrow><mo>&#x0002B;</mo><mstyle displaystyle="false" scriptlevel="0"><mfrac><mrow><mn>1</mn></mrow><mrow><mn>2</mn></mrow></mfrac></mstyle><mi>H</mi><mrow><mo stretchy="true" fence="true" form="prefix">&#x00028;</mo><mstyle displaystyle="false" scriptlevel="0"><mfrac><mrow><mn>2</mn></mrow><mrow><mn>3</mn></mrow></mfrac></mstyle><mo>&#x0002C;</mo><mstyle displaystyle="false" scriptlevel="0"><mfrac><mrow><mn>1</mn></mrow><mrow><mn>3</mn></mrow></mfrac></mstyle><mo stretchy="true" fence="true" form="postfix">&#x00029;</mo></mrow></mrow></math><figcaption>Property 3 (Fig. 6): a choice split into successive choices gives the weighted sum.</figcaption></figure>
+  <p class="lead">Shannon asks for a number H(p_1,...,p_n) that measures how much choice or uncertainty a set of probabilities contains. He requires continuity, monotonic growth with n when outcomes are equally likely, and consistency when a choice is split into successive choices. Theorem 2 shows the only such measure is H = -K Σ p_i log p_i; with K = 1 and base-2 logs, H is measured in bits.</p>
+  <div class="why"><h3>Why it matters</h3><p>H is the fundamental limit on how much a source can be compressed and how much information a symbol carries. It also gives a precise meaning to 'uncertainty': certainty gives 0 bits, and n equally likely outcomes give log2 n bits.</p></div>
+  <figure class='equation'><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><mrow><mi>H</mi><mo>&#x0003D;</mo><mo>&#x02212;</mo><mi>K</mi><munderover><mo>&#x02211;</mo><mrow><mi>i</mi><mo>&#x0003D;</mo><mn>1</mn></mrow><mrow><mi>n</mi></mrow></munderover><msub><mi>p</mi><mi>i</mi></msub><mi>log</mi><msub><mi>p</mi><mi>i</mi></msub></mrow></math><figcaption>Theorem 2: the unique measure satisfying Shannon's three requirements; K sets the unit.</figcaption></figure><figure class='equation'><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><mrow><mi>H</mi><mo>&#x0003D;</mo><mo>&#x02212;</mo><munderover><mo>&#x02211;</mo><mrow><mi>i</mi><mo>&#x0003D;</mo><mn>1</mn></mrow><mrow><mi>n</mi></mrow></munderover><msub><mi>p</mi><mi>i</mi></msub><msub><mi>log</mi><mn>2</mn></msub><msub><mi>p</mi><mi>i</mi></msub></mrow></math><figcaption>With K = 1 and base-2 logarithms, H is in bits.</figcaption></figure><figure class='equation'><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><mrow><mi>H</mi><mo>&#x0003D;</mo><mo>&#x02212;</mo><mo stretchy="false">&#x00028;</mo><mi>p</mi><mi>log</mi><mi>p</mi><mo>&#x0002B;</mo><mi>q</mi><mi>log</mi><mi>q</mi><mo stretchy="false">&#x00029;</mo><mo>&#x0002C;</mo><mspace width="1em" /><mi>q</mi><mo>&#x0003D;</mo><mn>1</mn><mo>&#x02212;</mo><mi>p</mi></mrow></math><figcaption>The two-outcome case plotted in Fig. 7.</figcaption></figure>
   <h3>Symbols</h3>
-  <div class="scroll-x"><table class="symbols"><tbody><tr><th scope='row'><math xmlns="http://www.w3.org/1998/Math/MathML" display="inline"><mrow><mi>n</mi></mrow></math></th><td>number of possible outcomes (events), a positive integer</td></tr><tr><th scope='row'><math xmlns="http://www.w3.org/1998/Math/MathML" display="inline"><mrow><msub><mi>p</mi><mi>i</mi></msub></mrow></math></th><td>probability of outcome i, with p_i ≥ 0 and Σ p_i = 1</td></tr><tr><th scope='row'><math xmlns="http://www.w3.org/1998/Math/MathML" display="inline"><mrow><msub><mi>w</mi><mi>i</mi></msub></mrow></math></th><td>raw nonnegative weight for outcome i; p_i = w_i / Σ w_j</td></tr><tr><th scope='row'><math xmlns="http://www.w3.org/1998/Math/MathML" display="inline"><mrow><mi>H</mi></mrow></math></th><td>entropy (choice/uncertainty) in bits, H ≥ 0</td></tr><tr><th scope='row'><math xmlns="http://www.w3.org/1998/Math/MathML" display="inline"><mrow><mi>K</mi></mrow></math></th><td>positive constant fixing the unit; K=1 with base-2 logs gives bits</td></tr><tr><th scope='row'><math xmlns="http://www.w3.org/1998/Math/MathML" display="inline"><mrow><msub><mi>c</mi><mi>i</mi></msub></mrow></math></th><td>contribution of outcome i, c_i = -p_i log2 p_i, so H = Σ c_i</td></tr></tbody></table></div>
-  <h3>How it works, step by step</h3><ol class="walk"><li>Choose n outcomes and give each a raw weight w_i ≥ 0 (the controls).</li><li>Normalize: p_i = w_i / Σ_j w_j, so the p_i are a valid probability distribution summing to 1.</li><li>For each outcome compute its surprise -log2 p_i and its contribution c_i = -p_i log2 p_i (with 0·log0 = 0).</li><li>Sum the contributions: H = Σ c_i, the entropy in bits.</li><li>Check the extremes: if one p_i = 1 then H = 0; if all p_i = 1/n then H = log2 n.</li></ol>
+  <div class="scroll-x"><table class="symbols"><tbody><tr><th scope='row'><math xmlns="http://www.w3.org/1998/Math/MathML" display="inline"><mrow><msub><mi>p</mi><mi>i</mi></msub></mrow></math></th><td>probability of outcome i; 0 ≤ p_i ≤ 1, and Σ p_i = 1</td></tr><tr><th scope='row'><math xmlns="http://www.w3.org/1998/Math/MathML" display="inline"><mrow><mi>n</mi></mrow></math></th><td>number of possible outcomes (a positive integer)</td></tr><tr><th scope='row'><math xmlns="http://www.w3.org/1998/Math/MathML" display="inline"><mrow><mi>H</mi></mrow></math></th><td>entropy, the average uncertainty in bits</td></tr><tr><th scope='row'><math xmlns="http://www.w3.org/1998/Math/MathML" display="inline"><mrow><mi>K</mi></mrow></math></th><td>positive constant fixing the unit; K = 1 with base-2 logs gives bits</td></tr><tr><th scope='row'><math xmlns="http://www.w3.org/1998/Math/MathML" display="inline"><mrow><mo>&#x02212;</mo><msub><mi>p</mi><mi>i</mi></msub><msub><mi>log</mi><mn>2</mn></msub><msub><mi>p</mi><mi>i</mi></msub></mrow></math></th><td>contribution of outcome i to H, in bits (0 when p_i = 0)</td></tr></tbody></table></div>
+  <h3>How it works, step by step</h3><ol class="walk"><li>Choose n outcomes and assign each a raw weight w_i ≥ 0.</li><li>Normalize: p_i = w_i / Σ_j w_j, so the probabilities sum to 1.</li><li>For each outcome compute its surprisal -log2 p_i (0 if p_i = 0).</li><li>Weight by probability: contribution_i = -p_i log2 p_i.</li><li>Sum the contributions to get H = -Σ p_i log2 p_i bits.</li></ol>
 </section>
 
 <section id="lab" aria-labelledby="h-lab">
@@ -179,61 +185,92 @@ code.tex { background: #f1f3f5; padding: 1px 4px; border-radius: 3px; }
 
 <section id="guided" aria-labelledby="h-guided">
   <h2 id="h-guided">3 · Guided explorations</h2>
-  <div class="explorations"><article class='explore'><header><span class='num'>1</span><h3>Certainty gives zero bits</h3><button class='preset' type='button' data-preset='0'>Load this setup</button></header><dl><dt>Change</dt><dd>Set w1 = 1 and all other weights to 0.</dd><dt>Observe</dt><dd>p = (1,0,0,0), contributions = (0,0,0,0) and H = 0 bits, while log2 n = 2 bits.</dd><dt>Why</dt><dd>If one outcome is certain there is no choice; Shannon's property 1 says H=0 iff all p_i but one are zero, and 0·log0 is taken as 0.</dd></dl></article><article class='explore'><header><span class='num'>2</span><h3>Four equally likely outcomes give two bits</h3><button class='preset' type='button' data-preset='1'>Load this setup</button></header><dl><dt>Change</dt><dd>Set all four weights equal (e.g. 1).</dd><dt>Observe</dt><dd>p = (0.25,0.25,0.25,0.25), each contribution = 0.5 bits, and H = 2.0 bits = log2 4.</dd><dt>Why</dt><dd>Property 2: for fixed n, H is maximized and equals log n when all p_i = 1/n — the most uncertain situation.</dd></dl></article></div>
+  <div class="explorations"><article class='explore'><header><span class='num'>1</span><h3>Certainty gives zero bits</h3><button class='preset' type='button' data-preset='0'>Load this setup</button></header><dl><dt>Change</dt><dd>Set w_1 = 1 and w_2 = w_3 = 0.</dd><dt>Observe</dt><dd>H = 0 bits, and the contribution bars show one bar of 0 and two bars of 0.</dd><dt>Why</dt><dd>One outcome has probability 1, so there is no choice; Shannon's property 1 says H = 0 exactly then.</dd></dl></article><article class='explore'><header><span class='num'>2</span><h3>Four equally likely outcomes give two bits</h3><button class='preset' type='button' data-preset='1'>Load this setup</button></header><dl><dt>Change</dt><dd>Set n = 4 and make all weights equal.</dd><dt>Observe</dt><dd>Each p_i = 0.25, each contribution is 0.5 bits, and H = 2 bits = log2 4.</dd><dt>Why</dt><dd>Property 2: with n equally likely outcomes H is maximal and equals log2 n.</dd></dl></article></div>
 </section>
 
 <section id="pitfall" aria-labelledby="h-pitfall">
   <h2 id="h-pitfall">4 · Common misunderstanding</h2>
-  <div class="callout">Entropy is not simply the number of outcomes. With n=4 but p=(0.97,0.01,0.01,0.01), H ≈ 0.24 bits, far below log2 4 = 2 bits, because the outcome is almost predictable. Only when the outcomes are equally likely does H reach log2 n.</div>
+  <div class="callout">Entropy is not simply the number of outcomes. Four outcomes with probabilities 0.7, 0.1, 0.1, 0.1 give H ≈ 1.36 bits, well below log2 4 = 2 bits, because the outcome is usually predictable.</div>
 </section>
 
 <section id="source" aria-labelledby="h-source">
   <h2 id="h-source">5 · Source grounding</h2>
-  <p>Paper: <a href="https://people.math.harvard.edu/~ctm/home/text/others/shannon/entropy/entropy.pdf">A Mathematical Theory of Communication · C. E. Shannon · 1948</a> — Section 6, Choice, Uncertainty and Entropy · H = -K Σ p_i log p_i (Theorem 2).</p>
+  <p>Paper: <a href="https://people.math.harvard.edu/~ctm/home/text/others/shannon/entropy/entropy.pdf">A Mathematical Theory of Communication · C. E. Shannon · 1948</a> — Section 6, Choice, Uncertainty and Entropy · Theorem 2 (unnumbered display equation).</p>
   <div class="grid2">
-    <div class="ground paper-side"><h3><span class="badge paper">From the paper</span></h3><ul class=''><li>Theorem 2: the only H satisfying continuity, monotonicity in n for equal probabilities, and the decomposition property is H = -K Σ p_i log p_i (Section 6).</li><li>Property 1: H = 0 if and only if all the p_i but one are zero, this one having the value unity (Section 6).</li><li>Property 2: for a given n, H is a maximum and equal to log n when all the p_i are equal (Section 6).</li><li>With base-2 logarithms H represents bits per symbol (Section 7).</li></ul><blockquote>“Can we ﬁnd a measure of how much “choice” is involved in the selection of the event or of how uncertain we are of the outcome?”</blockquote></div>
-    <div class="ground ours"><h3><span class="badge ours">Our simplifications &amp; examples</span></h3><ul class=''><li>We restrict n to 2–4 outcomes and use raw weights w_i that are normalized to p_i, so the learner can never enter an invalid distribution.</li><li>We use base-2 logarithms and K=1 throughout, so H is always in bits.</li><li>The sweep view varies only w1 while holding the other weights fixed, then renormalizes.</li></ul></div>
+    <div class="ground paper-side"><h3><span class="badge paper">From the paper</span></h3><ul class=''><li>Theorem 2: the only H satisfying Shannon's three requirements is H = -K Σ p_i log p_i (Section 6).</li><li>Property 1: H = 0 if and only if all p_i but one are zero, that one being unity (Section 6).</li><li>Property 2: for a given n, H is maximum and equal to log n when all p_i are equal (Section 6).</li><li>With base-2 logarithms, H represents bits per symbol (Section 7).</li></ul><blockquote>“Quantities of the form H = -Σ p_i log p_i (the constant K merely amounts to a choice of a unit of measure) play a central role in information theory as measures of information, choice and uncertainty.”</blockquote><blockquote>“Thus only when we are certain of the outcome does H vanish. Otherwise H is positive.”</blockquote></div>
+    <div class="ground ours"><h3><span class="badge ours">Our simplifications &amp; examples</span></h3><ul class=''><li>We use n between 2 and 4 and raw weights normalized to probabilities, rather than arbitrary distributions.</li><li>We set K = 1 and use base-2 logarithms so H is in bits.</li><li>The sweep varies only w_1 while the other weights stay fixed.</li></ul></div>
   </div>
   <p class="muted small">Explanation grounded in text extracted from the source (pdf). The interactive numbers are a small toy demonstration of the mechanism; they do not reproduce the paper's experimental results.</p>
 </section>
 
 </main>
-<script type="application/json" id="spec-data">{"digits": 3, "params": [{"id": "n", "label": "Number of outcomes n", "type": "number", "min": 2, "max": 4, "step": 1, "default": 4, "plain_label": "Number of outcomes n"}, {"id": "w", "label": "Raw weights w_i", "type": "vector", "length": "n", "default": [1, 1, 1, 1], "min": 0, "max": 10, "step": 0.1, "fill": 1, "symbol": "w_i", "labels": ["w1", "w2", "w3", "w4"], "plain_label": "Raw weights w_i"}], "views": [{"type": "pipeline", "title": "From weights to entropy", "steps": [{"label": "Raw weights <math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"inline\"><mrow><msub><mi>w</mi><mi>i</mi></msub></mrow></math>", "key": "weights", "note": "what you set"}, {"label": "Probabilities <math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"inline\"><mrow><msub><mi>p</mi><mi>i</mi></msub><mo>&#x0003D;</mo><msub><mi>w</mi><mi>i</mi></msub><mo>&#x0002F;</mo><msub><mo>&#x02211;</mo><mi>j</mi></msub><msub><mi>w</mi><mi>j</mi></msub></mrow></math>", "key": "probs", "note": "normalized, sum to 1"}, {"label": "Contributions <math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"inline\"><mrow><msub><mi>c</mi><mi>i</mi></msub><mo>&#x0003D;</mo><mo>&#x02212;</mo><msub><mi>p</mi><mi>i</mi></msub><msub><mi>log</mi><mn>2</mn></msub><msub><mi>p</mi><mi>i</mi></msub></mrow></math>", "key": "contributions", "note": "each outcome's share"}, {"label": "Entropy <math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"inline\"><mrow><mi>H</mi><mo>&#x0003D;</mo><msub><mo>&#x02211;</mo><mi>i</mi></msub><msub><mi>c</mi><mi>i</mi></msub></mrow></math> (bits)", "key": "H", "note": "total choice/uncertainty"}], "caption": "Every stage is live: change a weight and watch the probabilities, contributions and total H move together."}, {"type": "bars", "title": "Probability of each outcome", "series": [{"key": "probs", "label": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"inline\"><mrow><msub><mi>p</mi><mi>i</mi></msub></mrow></math>"}], "labels": "labels", "y_label": "probability", "ymin": 0, "ymax": 1, "caption": "The distribution you are measuring; equal bars mean maximum uncertainty for this n."}, {"type": "bars", "title": "Contribution of each outcome to H", "series": [{"key": "contributions", "label": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"inline\"><mrow><mo>&#x02212;</mo><msub><mi>p</mi><mi>i</mi></msub><msub><mi>log</mi><mn>2</mn></msub><msub><mi>p</mi><mi>i</mi></msub></mrow></math> (bits)"}], "labels": "labels", "y_label": "bits", "ymin": 0, "caption": "H is the sum of these bars; a near-certain outcome contributes almost nothing."}, {"type": "readout", "title": "Entropy summary", "items": [{"label": "Entropy <math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"inline\"><mrow><mi>H</mi></mrow></math>", "key": "H", "unit": "bits"}, {"label": "Maximum for this <math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"inline\"><mrow><mi>n</mi></mrow></math>: <math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"inline\"><mrow><msub><mi>log</mi><mn>2</mn></msub><mi>n</mi></mrow></math>", "key": "Hmax", "unit": "bits"}, {"label": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"inline\"><mrow><mi>H</mi><mo>&#x0002F;</mo><msub><mi>log</mi><mn>2</mn></msub><mi>n</mi></mrow></math>", "key": "H_over_Hmax"}, {"label": "All outcomes equally likely?", "key": "uniform"}], "caption": "H=0 only when one outcome is certain; H=log2 n when all are equally likely."}, {"type": "sweep", "title": "Entropy vs. one probability (others renormalized)", "x_param": "w", "x_index": 0, "y": [{"key": "H", "label": "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"inline\"><mrow><mi>H</mi></mrow></math> (bits)"}], "x_label": "w1", "y_label": "H (bits)", "caption": "Sweeping w1 traces how H rises as the distribution equalizes and falls as one outcome dominates."}], "checks": [{"id": "c1", "name": "Probabilities sum to 1"}, {"id": "c2", "name": "H equals sum of contributions"}, {"id": "c3", "name": "H is nonnegative"}, {"id": "c4", "name": "Certainty gives 0 bits", "params": {"n": 4, "w": [1, 0, 0, 0]}}, {"id": "c5", "name": "Four equally likely outcomes give 2 bits", "params": {"n": 4, "w": [1, 1, 1, 1]}}, {"id": "c6", "name": "Zero-probability outcome contributes 0", "params": {"n": 4, "w": [1, 0, 0, 0]}}], "presets": [{"n": 4, "w": [1, 0, 0, 0]}, {"n": 4, "w": [1, 1, 1, 1]}]}</script>
+<script type="application/json" id="spec-data">{"digits": 3, "params": [{"id": "n", "label": "Number of outcomes n", "type": "number", "min": 2, "max": 4, "step": 1, "default": 3, "plain_label": "Number of outcomes n"}, {"id": "w", "label": "Raw weights w_i", "type": "vector", "length": "n", "default": [1, 1, 1, 1], "min": 0, "max": 10, "step": 0.1, "fill": 1, "symbol": "w_i", "labels": ["outcome 1", "outcome 2", "outcome 3", "outcome 4"], "plain_label": "Raw weights w_i"}], "views": [{"type": "pipeline", "title": "From weights to entropy", "steps": [{"label": "Raw weights", "key": "probs", "latex": "w_i", "note": "normalized to probabilities", "math": "\u003cmath xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"inline\"\u003e\u003cmrow\u003e\u003cmsub\u003e\u003cmi\u003ew\u003c/mi\u003e\u003cmi\u003ei\u003c/mi\u003e\u003c/msub\u003e\u003c/mrow\u003e\u003c/math\u003e"}, {"label": "Probabilities", "key": "probs", "latex": "p_i", "note": "sum to 1", "math": "\u003cmath xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"inline\"\u003e\u003cmrow\u003e\u003cmsub\u003e\u003cmi\u003ep\u003c/mi\u003e\u003cmi\u003ei\u003c/mi\u003e\u003c/msub\u003e\u003c/mrow\u003e\u003c/math\u003e"}, {"label": "Contributions", "key": "contrib", "latex": "-p_i \\log_2 p_i", "note": "each outcome's share of H", "math": "\u003cmath xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"inline\"\u003e\u003cmrow\u003e\u003cmo\u003e&#x02212;\u003c/mo\u003e\u003cmsub\u003e\u003cmi\u003ep\u003c/mi\u003e\u003cmi\u003ei\u003c/mi\u003e\u003c/msub\u003e\u003cmsub\u003e\u003cmi\u003elog\u003c/mi\u003e\u003cmn\u003e2\u003c/mn\u003e\u003c/msub\u003e\u003cmsub\u003e\u003cmi\u003ep\u003c/mi\u003e\u003cmi\u003ei\u003c/mi\u003e\u003c/msub\u003e\u003c/mrow\u003e\u003c/math\u003e"}, {"label": "Entropy", "key": "H", "latex": "H", "note": "bits", "math": "\u003cmath xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"inline\"\u003e\u003cmrow\u003e\u003cmi\u003eH\u003c/mi\u003e\u003c/mrow\u003e\u003c/math\u003e"}], "caption": "Each outcome contributes -p_i log2 p_i; the total is H."}, {"type": "bars", "title": "Probabilities p_i", "series": [{"key": "probs", "label": "p_i"}], "labels": "labels", "y_label": "probability", "ymin": 0, "ymax": 1, "caption": "Changing the weights changes the shape of the distribution."}, {"type": "bars", "title": "Contributions -p_i log2 p_i (bits)", "series": [{"key": "contrib", "label": "contribution"}], "labels": "labels", "y_label": "bits", "ymin": 0, "caption": "Zero-probability outcomes contribute exactly 0 bits."}, {"type": "readout", "title": "Key values", "items": [{"label": "Entropy H", "key": "H", "unit": "bits"}, {"label": "Maximum log2 n", "key": "maxH", "unit": "bits"}, {"label": "All outcomes equally likely?", "key": "uniform"}], "caption": "H equals log2 n exactly when all p_i are equal."}, {"type": "sweep", "title": "H (bits) as Raw weights w_i (entry 1) varies", "x_param": "w", "x_index": 0, "y": [{"key": "H", "label": "H (bits)"}], "x_label": "w_1", "y_label": "H (bits)", "caption": "H as one probability varies. H is largest when the weights are equal and falls toward 0 as one outcome dominates."}], "checks": [{"id": "c1", "name": "Probabilities sum to 1"}, {"id": "c2", "name": "Entropy equals sum of contributions"}, {"id": "c3", "name": "Entropy is nonnegative"}, {"id": "c4", "name": "Certainty gives 0 bits", "params": {"n": 3, "w": [1, 0, 0, 0]}}, {"id": "c5", "name": "Four equally likely outcomes give 2 bits", "params": {"n": 4, "w": [1, 1, 1, 1]}}, {"id": "c6", "name": "Entropy never exceeds log2 n"}], "presets": [{"n": 3, "w": [1, 0, 0, 0]}, {"n": 4, "w": [1, 1, 1, 1]}]}</script>
 <script>
 window.__explainer = (function () {
   "use strict";
-  var compute = (function compute(p) {
-  var n = Math.max(2, Math.round(p.n));
+  var compute = (function () {
+function compute(p) {
+  var n = Math.max(2, Math.min(4, Math.round(p.n)));
   var w = [];
-  for (var i = 0; i < n; i++) { var v = (p.w && p.w[i] != null) ? Number(p.w[i]) : 1; if (!isFinite(v) || v < 0) v = 0; w.push(v); }
-  var S = 0; for (var j = 0; j < n; j++) S += w[j];
-  var warning = null;
-  if (S <= 0) { warning = 'All weights are zero; falling back to a uniform distribution.'; for (var k = 0; k < n; k++) w[k] = 1; S = n; }
-  var probs = [], contrib = [], surprise = [];
-  for (var m = 0; m < n; m++) {
-    var pi = w[m] / S;
-    probs.push(pi);
-    if (pi > 0) { var s = -Math.log(pi) / Math.LN2; surprise.push(s); contrib.push(pi * s); }
-    else { surprise.push(null); contrib.push(0); }
+  for (var i = 0; i < n; i++) {
+    var v = (p.w && p.w[i] !== undefined) ? Number(p.w[i]) : 1;
+    if (!isFinite(v) || v < 0) v = 0;
+    w.push(v);
   }
-  var H = 0; for (var q = 0; q < n; q++) H += contrib[q];
-  var Hmax = Math.log(n) / Math.LN2;
-  var labels = []; for (var r = 0; r < n; r++) labels.push('p' + (r + 1));
-  var wlabels = []; for (var t = 0; t < n; t++) wlabels.push('w' + (t + 1));
-  var uniform = true; for (var u = 1; u < n; u++) if (Math.abs(probs[u] - probs[0]) > 1e-9) uniform = false;
+  var sum = 0;
+  for (var j = 0; j < n; j++) sum += w[j];
+  var warning = null;
+  var probs = [];
+  if (sum <= 0) {
+    warning = 'All weights are zero, so no distribution exists; showing the uniform distribution instead.';
+    for (var k = 0; k < n; k++) probs.push(1 / n);
+  } else {
+    for (var m = 0; m < n; m++) probs.push(w[m] / sum);
+  }
+  var contrib = [];
+  var surprisal = [];
+  var H = 0;
+  for (var q = 0; q < n; q++) {
+    var pi = probs[q];
+    if (pi > 0) {
+      var s = -Math.log(pi) / Math.LN2;
+      surprisal.push(s);
+      var c = pi * s;
+      contrib.push(c);
+      H += c;
+    } else {
+      surprisal.push(null);
+      contrib.push(0);
+    }
+  }
+  var labels = [];
+  for (var r = 0; r < n; r++) labels.push('outcome ' + (r + 1));
+  var maxH = Math.log(n) / Math.LN2;
+  var uniform = true;
+  for (var t = 0; t < n; t++) {
+    if (Math.abs(probs[t] - 1 / n) > 1e-9) uniform = false;
+  }
   return {
-    n: n, weights: w, weight_labels: wlabels, probs: probs, labels: labels,
-    contributions: contrib, surprises: surprise, H: H, Hmax: Hmax,
-    H_over_Hmax: Hmax > 0 ? H / Hmax : 0, uniform: uniform, warning: warning
+    n: n,
+    probs: probs,
+    contrib: contrib,
+    surprisal: surprisal,
+    H: H,
+    maxH: maxH,
+    uniform: uniform,
+    labels: labels,
+    warning: warning
   };
-});
+};
+return compute;
+})();
   var checks = {
     "c1": { test: function (p, r) { return (Math.abs(r.probs.reduce(function(a,b){return a+b;},0) - 1) < 1e-9); }, show: function (p, r) { return (r.probs.reduce(function(a,b){return a+b;},0)); } },
-    "c2": { test: function (p, r) { return (Math.abs(r.H - r.contributions.reduce(function(a,b){return a+b;},0)) < 1e-9); }, show: function (p, r) { return (r.H); } },
+    "c2": { test: function (p, r) { return (Math.abs(r.H - r.contrib.reduce(function(a,b){return a+b;},0)) < 1e-9); }, show: function (p, r) { return (r.H); } },
     "c3": { test: function (p, r) { return (r.H >= -1e-12); }, show: function (p, r) { return (r.H); } },
     "c4": { test: function (p, r) { return (Math.abs(r.H) < 1e-9); }, show: function (p, r) { return (r.H); } },
     "c5": { test: function (p, r) { return (Math.abs(r.H - 2) < 1e-9); }, show: function (p, r) { return (r.H); } },
-    "c6": { test: function (p, r) { return (r.contributions[1] === 0 && r.surprises[1] === null); }, show: function (p, r) { return (r.contributions[1]); } }
+    "c6": { test: function (p, r) { return (r.H <= r.maxH + 1e-9); }, show: function (p, r) { return (r.maxH - r.H); } }
   };
   var draw = {
     
@@ -482,7 +519,23 @@ window.__explainer = (function () {
     return [];
   }
   function bars(v, r, box) {
-    var series = seriesList(v).map(function (s) { return { s: s, data: lookup(r, s.key) || [] }; });
+    var list = seriesList(v);
+    if (list.length && list.every(function (s) { return isNum(lookup(r, s.key)); })) {
+      // Each series is one number: draw one bar per key, labelled by the series label.
+      var vals = list.map(function (s) { return lookup(r, s.key); });
+      var labs = list.map(function (s) { return String(s.label || s.key).replace(/<[^>]*>/g, ""); });
+      r = Object.assign({}, r, { __bars_vals: vals, __bars_labels: labs });
+      v = Object.assign({}, v, { series: [{ key: "__bars_vals", label: v.value_label || "" }], labels: "__bars_labels" });
+    }
+    var series = [];
+    seriesList(v).forEach(function (s) {
+      var d = lookup(r, s.key) || [];
+      if (Array.isArray(d) && Array.isArray(d[0])) {  // a matrix: one series per row
+        d.forEach(function (row, k) { series.push({ s: { key: s.key, label: (s.label || s.key) + " row " + (k + 1) }, data: row }); });
+      } else {
+        series.push({ s: s, data: d });
+      }
+    });
     var n = Math.max.apply(null, series.map(function (x) { return x.data.length; }).concat([0]));
     if (!n) { box.appendChild(el("p", { "class": "muted" }, "No values to show.")); return; }
     var labels = lookup(r, v.labels) || [];
@@ -593,7 +646,7 @@ window.__explainer = (function () {
       var val = lookup(r, it.key);
       g.appendChild(el("div", { "class": "ro" },
         "<div class='ro-label'>" + (it.label || it.key) + "</div><div class='ro-value'>" +
-        (Array.isArray(val) ? valueHTML(val) : fmt(val, it.digits)) + (it.unit ? " <span class='unit'>" + esc(it.unit) + "</span>" : "") +
+        (Array.isArray(val) ? valueHTML(val) : fmt(val, it.digits)) + ((it.unit_key && lookup(r, it.unit_key)) || it.unit ? " <span class='unit'>" + esc((it.unit_key && lookup(r, it.unit_key)) || it.unit) + "</span>" : "") +
         "</div>" + (it.note ? "<div class='ro-note'>" + it.note + "</div>" : "")));
     });
     box.appendChild(g);
@@ -643,6 +696,7 @@ window.__explainer = (function () {
     });
     add(s, "line", { x1: L, x2: W - R, y1: T + ph, y2: T + ph, "class": "axis" });
     add(s, "line", { x1: L, x2: L, y1: T, y2: T + ph, "class": "axis" });
+    var discrete = opt.discrete || (xs.length <= 40 && fx.every(function (x) { return Number.isInteger(x); }));
     ys.forEach(function (y, k) {
       var d = "", pen = false;
       xs.forEach(function (x, i) {
@@ -651,7 +705,16 @@ window.__explainer = (function () {
         d += (pen ? "L" : "M") + X(x).toFixed(1) + " " + Y(Math.max(y0, Math.min(y1, v))).toFixed(1);
         pen = true;
       });
-      add(s, "path", { d: d, fill: "none", stroke: y.color || PALETTE[k % PALETTE.length], "stroke-width": 2.4 });
+      var color = y.color || PALETTE[k % PALETTE.length];
+      if (discrete) {  // values exist only at these x: faint guide line plus a dot per point
+        add(s, "path", { d: d, fill: "none", stroke: color, "stroke-width": 1, "stroke-dasharray": "3 3", opacity: 0.5 });
+        xs.forEach(function (x, i) {
+          var v = y.data[i];
+          if (isNum(v) && isFinite(v) && isFinite(x)) add(s, "circle", { cx: X(x), cy: Y(Math.max(y0, Math.min(y1, v))), r: 3.5, fill: color });
+        });
+      } else {
+        add(s, "path", { d: d, fill: "none", stroke: color, "stroke-width": 2.4 });
+      }
     });
     if (opt.markerX != null && isFinite(opt.markerX)) {
       add(s, "line", { x1: X(opt.markerX), x2: X(opt.markerX), y1: T, y2: T + ph, "class": "marker" });
@@ -669,23 +732,39 @@ window.__explainer = (function () {
   function sweep(v, r, box) {
     var p = paramById(v.x_param);
     if (!p) return;
-    var idx = p.type === "vector" ? Math.max(0, Math.min(state[p.id].length - 1, v.x_index || 0)) : null;
+    var idx = null, ij = null;
+    if (p.type === "vector") idx = Math.max(0, Math.min(state[p.id].length - 1, v.x_index || 0));
+    if (p.type === "matrix") {
+      var xi = Array.isArray(v.x_index) ? v.x_index : [0, 0];
+      ij = [Math.max(0, Math.min(state[p.id].length - 1, xi[0] || 0)), Math.max(0, Math.min(state[p.id][0].length - 1, xi[1] || 0))];
+    }
     var lo = v.x_min != null ? v.x_min : p.min, hi = v.x_max != null ? v.x_max : p.max;
     var n = p.step && Number.isInteger(p.step) && (hi - lo) / p.step <= 80 ? Math.round((hi - lo) / p.step) + 1 : 81;
     var xs = [], ys = (v.y || []).map(function (y) { return { key: y.key, label: y.label, color: y.color, data: [] }; });
     for (var i = 0; i < n; i++) {
       var x = lo + (hi - lo) * i / (n - 1);
       var st = clone(state);
-      if (idx === null) st[p.id] = x; else st[p.id][idx] = x;
+      if (ij) st[p.id][ij[0]][ij[1]] = x; else if (idx === null) st[p.id] = x; else st[p.id][idx] = x;
       normalizeShapes(st);
       var out;
       try { out = run(st); } catch (e) { out = {}; }
       xs.push(x);
       ys.forEach(function (y) { y.data.push(out[y.key]); });
     }
-    var name = (p.plain_label || p.id) + (idx === null ? "" : " — entry " + (idx + 1));
+    // A y key that returns a list (e.g. one value per query) becomes one line per element.
+    var expanded = [];
+    ys.forEach(function (y) {
+      var first = y.data.filter(Array.isArray)[0];
+      if (!first) { expanded.push(y); return; }
+      first.forEach(function (_, k) {
+        expanded.push({ key: y.key, label: (y.label || y.key) + " [" + (k + 1) + "]", data: y.data.map(function (d) { return Array.isArray(d) ? d[k] : null; }), index: k });
+      });
+    });
+    ys = expanded;
+    var name = (p.plain_label || p.id) + (ij ? " — entry (" + (ij[0] + 1) + "," + (ij[1] + 1) + ")" : idx === null ? "" : " — entry " + (idx + 1));
     linePlot(box, xs, ys, {
-      markerX: idx === null ? state[p.id] : state[p.id][idx], markerY: ys.map(function (y) { return r[y.key]; }),
+      markerX: ij ? state[p.id][ij[0]][ij[1]] : idx === null ? state[p.id] : state[p.id][idx],
+      markerY: ys.map(function (y) { var m = r[y.key]; return y.index != null && Array.isArray(m) ? m[y.index] : m; }),
       x_label: v.x_label || name, y_label: v.y_label, ymin: v.ymin, ymax: v.ymax, include_zero: v.include_zero
     });
     box.appendChild(el("p", { "class": "caption" }, "Curve: every point is recomputed with only " + esc(name) + " changed and all other inputs held at your current settings; the dot marks your current value."));
@@ -701,7 +780,7 @@ window.__explainer = (function () {
     var fn = CODE.draw && CODE.draw[v.id];
     if (!fn) return;
     var out = fn(clone(state), r);
-    if (typeof out === "string" && /^\s*<svg[\s>]/i.test(out) && !/<script|\son\w+\s*=|href\s*=\s*["']?(https?:|javascript:)/i.test(out)) {
+    if (typeof out === "string" && /^\s*<svg[\s>]/i.test(out) && !/<\s*(script|foreignObject|iframe|image|use|a|style)\b|\son\w+\s*=|href\s*=|url\s*\(/i.test(out)) {
       var holder = el("div", { "class": "custom-svg" }, out);
       box.appendChild(holder);
     } else {

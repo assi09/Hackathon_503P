@@ -1,78 +1,83 @@
 {
  "plan": {
-  "concept": "Scaled dot-product attention: scores QK^T/sqrt(d_k), softmax over keys, weighted sum of V.",
+  "concept": "Scaled dot-product attention: softmax(QK^T/sqrt(d_k))V, with editable Q, K, V and a scaling toggle.",
   "learning_outcomes": [
-   "Compute similarity scores between a query and all keys.",
-   "Explain why dividing by sqrt(d_k) keeps softmax out of saturated regions.",
-   "Show that each row of attention weights sums to 1 and the output is the weighted sum of V rows."
+   "Compute similarity scores QK^T and see how dividing by sqrt(d_k) changes them.",
+   "Convert scores to attention weights with softmax and verify each row sums to 1.",
+   "See the output as a weighted average of the value rows.",
+   "Explain why scaling matters when d_k is large."
   ],
-  "visual_strategy": "Editable Q, K, V matrices feed a pipeline of scores -> scaled scores -> softmax weights -> output; heatmaps and bars show each stage; a sweep shows how scaling changes weight sharpness as d_k grows.",
-  "misconception": "Scaling is not a normalization of the output; it only rescales the logits before softmax, changing how peaked the weights are."
+  "visual_strategy": "Pipeline of score -> scaled score -> weights -> output, plus heatmaps of scores and weights, a table of the output rows, and a sweep showing how the largest weight grows with d_k when scaling is off.",
+  "misconception": "Softmax weights are not a similarity ranking alone: they are a probability distribution over value rows, and without scaling large d_k makes that distribution nearly one-hot."
  },
  "title": "Scaled Dot-Product Attention, Step by Step",
  "paper": {
   "title": "Attention Is All You Need",
-  "authors": "Vaswani, Shazeer, Parmar, Uszkoreit, Jones, Gomez, Kaiser, Polosukhin",
+  "authors": "Vaswani et al.",
   "year": "2017",
   "section": "Section 3.2.1",
   "equation": "Eq. (1)"
  },
- "idea": "Attention maps a query and a set of key-value pairs to an output. Each query is compared with every key by a dot product; after dividing by sqrt(d_k) and applying softmax, the resulting weights say how much of each value vector to mix. The output is that weighted sum of the value vectors.",
- "why_it_matters": "This single formula is the core operation of the Transformer: it lets every position gather information from all other positions in one parallel matrix multiply. The sqrt(d_k) scaling is what keeps the softmax trainable when key/query dimensions are large.",
+ "idea": "Attention maps a query and a set of key-value pairs to an output. Each query is compared with every key by a dot product; after dividing by sqrt(d_k) and applying softmax, the resulting weights say how much of each value row to mix. The output row is the weighted average of the value rows.",
+ "why_it_matters": "This single formula is the core operation of the Transformer. The 1/sqrt(d_k) factor keeps the softmax in a well-behaved range so gradients do not vanish when the key dimension is large.",
  "equations": [
   {
-   "latex": "\\mathrm{Attention}(Q,K,V)=\\mathrm{softmax}\\!\\left(\\frac{QK^{T}}{\\sqrt{d_{k}}}\\right)V",
+   "latex": "\\mathrm{Attention}(Q,K,V)=\\mathrm{softmax}\\left(\\frac{QK^{T}}{\\sqrt{d_{k}}}\\right)V",
    "caption": "Scaled dot-product attention (Eq. 1)."
   },
   {
    "latex": "\\mathrm{softmax}(z)_i=\\frac{e^{z_i}}{\\sum_j e^{z_j}}",
-   "caption": "Softmax turns scores into weights that sum to 1."
+   "caption": "Softmax turns each row of scores into weights that sum to 1."
   },
   {
-   "latex": "q\\cdot k=\\sum_{i=1}^{d_{k}}q_{i}k_{i},\\quad \\mathrm{Var}(q\\cdot k)=d_{k}",
-   "caption": "For independent unit-variance components, dot products grow with d_k (footnote 1)."
+   "latex": "q\\cdot k=\\sum_{i=1}^{d_k} q_i k_i",
+   "caption": "Dot product of one query with one key; its variance grows like d_k when entries are independent with variance 1."
   }
  ],
  "symbols": [
   {
    "symbol": "Q",
-   "meaning": "matrix of queries, one row per query position, each row of length $d_k$"
+   "meaning": "matrix of queries, one row per query position; shape n x d_k"
   },
   {
    "symbol": "K",
-   "meaning": "matrix of keys, one row per key position, each row of length $d_k$"
+   "meaning": "matrix of keys, one row per key position; shape m x d_k"
   },
   {
    "symbol": "V",
-   "meaning": "matrix of values, one row per key position, each row of length $d_v$"
+   "meaning": "matrix of values, one row per key position; shape m x d_v"
   },
   {
    "symbol": "d_k",
-   "meaning": "dimension of queries and keys (number of columns of Q and K)"
+   "meaning": "dimension of each query/key vector (number of columns of Q and K)"
   },
   {
    "symbol": "d_v",
-   "meaning": "dimension of values (number of columns of V)"
+   "meaning": "dimension of each value vector (number of columns of V)"
   },
   {
-   "symbol": "S",
-   "meaning": "raw score matrix $QK^{T}$, shape (queries x keys)"
+   "symbol": "QK^T",
+   "meaning": "matrix of raw similarity scores, shape n x m"
   },
   {
-   "symbol": "A",
-   "meaning": "attention weight matrix after softmax, each row sums to 1"
+   "symbol": "\\sqrt{d_k}",
+   "meaning": "scaling factor that counteracts the growth of dot-product variance"
   },
   {
-   "symbol": "O",
-   "meaning": "output matrix $AV$, one row per query"
+   "symbol": "\\mathrm{softmax}",
+   "meaning": "row-wise normalization into non-negative weights summing to 1"
+  },
+  {
+   "symbol": "\\mathrm{Attention}(Q,K,V)",
+   "meaning": "output matrix, shape n x d_v"
   }
  ],
  "walkthrough": [
-  "Take one query row $q$ and every key row $k_j$; compute raw scores $s_j = q\\cdot k_j$ (the matrix $S=QK^{T}$).",
-  "Divide each score by $\\sqrt{d_k}$ to get scaled logits $z_j = s_j/\\sqrt{d_k}$.",
-  "Apply softmax over the keys: $a_j = e^{z_j}/\\sum_m e^{z_m}$, giving a row of weights that sums to 1.",
-  "Form the output for that query as the weighted sum $o = \\sum_j a_j v_j$; stacking rows gives $O=AV$.",
-  "Repeat for every query row; each row of $A$ is an independent probability distribution over the keys."
+  "Form the raw scores S = QK^T: entry (i,j) is the dot product of query row i with key row j.",
+  "Divide every score by sqrt(d_k) to get the scaled scores; this keeps their spread roughly constant as d_k grows.",
+  "Apply softmax to each row of scaled scores, producing attention weights A whose rows are non-negative and sum to 1.",
+  "Multiply A by V: output row i is the weighted average of the value rows, with weights A[i,:].",
+  "Inspect the weights: equal scores give a uniform row, a dominant score gives a row concentrated on one value."
  ],
  "params": [
   {
@@ -88,13 +93,13 @@
     ],
     [
      0,
-     2,
+     1,
      0
     ]
    ],
    "min": -3,
    "max": 3,
-   "step": 0.1,
+   "step": 0.5,
    "fill": 0,
    "symbol": "Q",
    "row_labels": [
@@ -131,7 +136,7 @@
    ],
    "min": -3,
    "max": 3,
-   "step": 0.1,
+   "step": 0.5,
    "fill": 0,
    "symbol": "K",
    "row_labels": [
@@ -166,7 +171,7 @@
    ],
    "min": -3,
    "max": 3,
-   "step": 0.1,
+   "step": 0.5,
    "fill": 0,
    "symbol": "V",
    "row_labels": [
@@ -175,129 +180,112 @@
     "v3"
    ],
    "col_labels": [
-    "c1",
-    "c2"
+    "o1",
+    "o2"
    ]
   },
   {
-   "id": "scale",
+   "id": "scaled",
    "type": "toggle",
-   "label": "Divide scores by sqrt(d_k)",
    "default": true,
-   "help": "Off = plain dot-product attention; On = scaled dot-product attention (Eq. 1)."
-  },
-  {
-   "id": "temperature",
-   "type": "number",
-   "label": "Softmax temperature T",
-   "min": 0.2,
-   "max": 3,
-   "step": 0.1,
-   "default": 1,
-   "help": "Softmax is applied to z/T; T=1 is the paper's setting."
+   "label": "Divide scores by sqrt(d_k)",
+   "help": "Turn off to see unscaled dot-product attention."
   }
  ],
- "compute": "function compute(p) {\n  var Q = p.Q, K = p.K, V = p.V;\n  var nq = Q.length, nk = K.length, dk = Q[0].length, dv = V[0].length;\n  var T = p.temperature > 0 ? p.temperature : 1;\n  var denom = p.scale ? Math.sqrt(dk) : 1;\n  var S = [], Z = [], A = [], O = [];\n  var warning = null;\n  for (var i = 0; i < nq; i++) {\n    var srow = [], zrow = [];\n    for (var j = 0; j < nk; j++) {\n      var s = 0;\n      for (var d = 0; d < dk; d++) s += Q[i][d] * K[j][d];\n      srow.push(s);\n      zrow.push(s / denom / T);\n    }\n    S.push(srow); Z.push(zrow);\n    var m = -Infinity;\n    for (var j2 = 0; j2 < nk; j2++) if (zrow[j2] > m) m = zrow[j2];\n    var ex = [], sum = 0;\n    for (var j3 = 0; j3 < nk; j3++) { var e = Math.exp(zrow[j3] - m); ex.push(e); sum += e; }\n    var arow = [];\n    for (var j4 = 0; j4 < nk; j4++) arow.push(ex[j4] / sum);\n    A.push(arow);\n    var orow = [];\n    for (var c = 0; c < dv; c++) {\n      var acc = 0;\n      for (var j5 = 0; j5 < nk; j5++) acc += arow[j5] * V[j5][c];\n      orow.push(acc);\n    }\n    O.push(orow);\n  }\n  var rowSums = [];\n  for (var i2 = 0; i2 < nq; i2++) { var rs = 0; for (var j6 = 0; j6 < nk; j6++) rs += A[i2][j6]; rowSums.push(rs); }\n  var maxAbsZ = 0;\n  for (var i3 = 0; i3 < nq; i3++) for (var j7 = 0; j7 < nk; j7++) { var v = Math.abs(Z[i3][j7]); if (v > maxAbsZ) maxAbsZ = v; }\n  var maxWeight = 0;\n  for (var i4 = 0; i4 < nq; i4++) for (var j8 = 0; j8 < nk; j8++) if (A[i4][j8] > maxWeight) maxWeight = A[i4][j8];\n  var qLabels = [], kLabels = [], vLabels = [];\n  for (var i5 = 0; i5 < nq; i5++) qLabels.push('q' + (i5 + 1));\n  for (var j9 = 0; j9 < nk; j9++) kLabels.push('k' + (j9 + 1));\n  for (var j10 = 0; j10 < nk; j10++) vLabels.push('v' + (j10 + 1));\n  var flatA = [];\n  for (var i6 = 0; i6 < nq; i6++) for (var j11 = 0; j11 < nk; j11++) flatA.push(A[i6][j11]);\n  var flatZ = [];\n  for (var i7 = 0; i7 < nq; i7++) for (var j12 = 0; j12 < nk; j12++) flatZ.push(Z[i7][j12]);\n  var flatLabels = [];\n  for (var i8 = 0; i8 < nq; i8++) for (var j13 = 0; j13 < nk; j13++) flatLabels.push('q' + (i8 + 1) + '->k' + (j13 + 1));\n  var Ocol0 = [], Ocol1 = [];\n  for (var i9 = 0; i9 < nq; i9++) { Ocol0.push(O[i9][0]); Ocol1.push(O[i9][1]); }\n  return {\n    S: S, Z: Z, A: A, O: O,\n    Ocol0: Ocol0, Ocol1: Ocol1,\n    rowSums: rowSums,\n    maxAbsZ: maxAbsZ,\n    maxWeight: maxWeight,\n    dk: dk, dv: dv, nq: nq, nk: nk,\n    denom: denom,\n    qLabels: qLabels, kLabels: kLabels, vLabels: vLabels,\n    flatA: flatA, flatZ: flatZ, flatLabels: flatLabels,\n    warning: warning\n  };\n}",
+ "compute": "function compute(p) {\n  var Q = p.Q, K = p.K, V = p.V;\n  var n = Q.length, m = K.length;\n  var dk = (n > 0 && Q[0]) ? Q[0].length : 0;\n  var dv = (m > 0 && V[0]) ? V[0].length : 0;\n  var scale = p.scaled ? Math.sqrt(dk) : 1;\n  var S = [], Z = [], A = [], O = [];\n  var i, j, t, s, mx, ex, sum;\n  for (i = 0; i < n; i++) {\n    S.push([]); Z.push([]); A.push([]); O.push([]);\n    for (j = 0; j < m; j++) {\n      s = 0;\n      for (t = 0; t < dk; t++) s += Q[i][t] * K[j][t];\n      S[i].push(s);\n      Z[i].push(s / scale);\n    }\n    mx = -Infinity;\n    for (j = 0; j < m; j++) if (Z[i][j] > mx) mx = Z[i][j];\n    sum = 0;\n    for (j = 0; j < m; j++) { ex = Math.exp(Z[i][j] - mx); A[i].push(ex); sum += ex; }\n    for (j = 0; j < m; j++) A[i][j] = A[i][j] / sum;\n    for (t = 0; t < dv; t++) {\n      s = 0;\n      for (j = 0; j < m; j++) s += A[i][j] * V[j][t];\n      O[i].push(s);\n    }\n  }\n  var rowSums = [], maxW = [], entropy = [];\n  for (i = 0; i < n; i++) {\n    s = 0;\n    for (j = 0; j < m; j++) s += A[i][j];\n    rowSums.push(s);\n    mx = -Infinity;\n    for (j = 0; j < m; j++) if (A[i][j] > mx) mx = A[i][j];\n    maxW.push(mx);\n    var h = 0;\n    for (j = 0; j < m; j++) if (A[i][j] > 0) h -= A[i][j] * Math.log(A[i][j]);\n    entropy.push(h);\n  }\n  var flat = [];\n  for (i = 0; i < n; i++) for (j = 0; j < m; j++) flat.push(Z[i][j]);\n  var zmin = Math.min.apply(null, flat), zmax = Math.max.apply(null, flat);\n  var warning = null;\n  if (dk === 0 || m === 0) warning = 'Add at least one key/value row and one dimension to see attention.';\n  else if (!p.scaled && dk >= 8) warning = 'Scaling is off and d_k is large: scores are spread out, so softmax is nearly one-hot and gradients shrink.';\n  return {\n    scores: S, scaledScores: Z, weights: A, output: O,\n    rowSums: rowSums, maxWeight: maxW, entropy: entropy,\n    dk: dk, dv: dv, n: n, m: m, scale: scale,\n    scoreMin: zmin, scoreMax: zmax,\n    qLabels: Q.map(function (_, k) { return 'q' + (k + 1); }),\n    kLabels: K.map(function (_, k) { return 'k' + (k + 1); }),\n    vLabels: V.map(function (_, k) { return 'v' + (k + 1); }),\n    oLabels: O.map(function (_, k) { return 'o' + (k + 1); }),\n    warning: warning\n  };\n}",
  "views": [
   {
    "type": "pipeline",
-   "title": "From Q, K, V to the output",
+   "title": "From scores to output",
    "steps": [
     {
-     "label": "Queries Q",
-     "key": "qLabels",
-     "note": "one row per query"
+     "label": "Raw scores QK^T",
+     "key": "scores",
+     "latex": "S=QK^{T}",
+     "note": "dot product of each query with each key"
     },
     {
-     "label": "Raw scores S = QK^T",
-     "key": "S",
-     "latex": "S=QK^{T}"
+     "label": "Scaled scores",
+     "key": "scaledScores",
+     "latex": "S/\\sqrt{d_k}",
+     "note": "scale = sqrt(d_k) when the toggle is on"
     },
     {
-     "label": "Scaled logits z = S/sqrt(d_k)",
-     "key": "Z",
-     "latex": "z=S/\\sqrt{d_k}"
+     "label": "Attention weights",
+     "key": "weights",
+     "latex": "A=\\mathrm{softmax}(S/\\sqrt{d_k})",
+     "note": "each row sums to 1"
     },
     {
-     "label": "Weights A = softmax(z)",
-     "key": "A",
-     "latex": "A=\\mathrm{softmax}(z)"
-    },
-    {
-     "label": "Output O = AV",
-     "key": "O",
-     "latex": "O=AV"
+     "label": "Output",
+     "key": "output",
+     "latex": "AV",
+     "note": "weighted average of value rows"
     }
    ],
-   "caption": "Each stage is a live matrix; toggling scaling changes z, A and O but not S."
+   "caption": "Every stage is recomputed live from your Q, K and V."
   },
   {
    "type": "heatmap",
-   "title": "Attention weights A (rows sum to 1)",
-   "value": "A",
+   "title": "Attention weights A (rows = queries, columns = keys)",
+   "value": "weights",
    "row_labels": "qLabels",
    "col_labels": "kLabels",
    "row_sums": true,
    "colormap": "sequential",
-   "caption": "Brighter cells mean the query puts more weight on that key."
-  },
-  {
-   "type": "bars",
-   "title": "Weights per query-key pair",
-   "series": [
-    {
-     "key": "flatA",
-     "label": "attention weight"
-    }
-   ],
-   "labels": "flatLabels",
-   "y_label": "weight",
-   "ymin": 0,
-   "ymax": 1,
-   "caption": "With scaling on, weights are less extreme; with scaling off and large d_k they saturate."
+   "caption": "Brighter cells mean the query puts more weight on that key's value row."
   },
   {
    "type": "table",
-   "title": "Output O = weighted sum of V rows",
+   "title": "Output rows = weighted sums of V",
    "columns": [
     {
-     "label": "o1",
-     "key": "Ocol0",
+     "label": "output o1",
+     "key": "output",
      "digits": 3
     },
     {
-     "label": "o2",
-     "key": "Ocol1",
-     "digits": 3
-    }
-   ],
-   "row_labels": "qLabels",
-   "row_header": "query",
-   "footer": [
-    {
-     "label": "max |z|",
-     "key": "maxAbsZ"
+     "label": "row sum of A",
+     "key": "rowSums",
+     "digits": 6
     },
     {
      "label": "max weight",
-     "key": "maxWeight"
+     "key": "maxWeight",
+     "digits": 3
     }
    ],
-   "caption": "Compare each output row with the V rows it mixes."
+   "row_labels": "oLabels",
+   "row_header": "query",
+   "footer": [
+    {
+     "label": "d_k",
+     "key": "dk"
+    },
+    {
+     "label": "d_v",
+     "key": "dv"
+    }
+   ],
+   "caption": "Row sums stay at 1; max weight shows how concentrated each row is."
   },
   {
    "type": "sweep",
-   "title": "Effect of scaling as d_k grows (toy: repeat the first column)",
-   "x_param": "temperature",
+   "title": "Effect of the first score on the largest attention weight",
+   "x_param": "Q",
+   "x_index": [
+    0,
+    0
+   ],
    "y": [
     {
      "key": "maxWeight",
-     "label": "largest attention weight"
+     "label": "max weight (row 1)"
     }
    ],
-   "x_label": "softmax temperature T",
-   "y_label": "max weight",
-   "caption": "Lower T sharpens the softmax toward a one-hot distribution; higher T flattens it."
+   "x_label": "Q[0][0] (first query component)",
+   "y_label": "largest weight",
+   "caption": "Raising Q[0][0] raises the first score, pushing softmax toward a one-hot row."
   }
  ],
  "explorations": [
@@ -312,7 +300,7 @@
      ],
      [
       0,
-      2,
+      1,
       0
      ]
     ],
@@ -347,43 +335,42 @@
       1
      ]
     ],
-    "scale": true,
-    "temperature": 1
+    "scaled": true
    },
-   "change": "Set all three rows of K equal (as in the preset) and keep scaling on.",
-   "observe": "Every raw score in a row is identical, so A has 1/3 in each cell and rowSums = 1 for both queries; O becomes the average of the three V rows, (0.667, 0.667).",
-   "why": "Softmax of equal logits is uniform, so the output is the plain mean of the values."
+   "change": "Set all three rows of K equal (as in the preset) so every key is identical.",
+   "observe": "Every score in row 1 is 2, the weights row becomes [0.333, 0.333, 0.333], and the output row is the plain average of the value rows, [0.667, 0.667].",
+   "why": "Softmax of equal scores is uniform, so the output is an unweighted average of V."
   },
   {
-   "title": "A dominant key and the role of sqrt(d_k)",
+   "title": "A dominant score concentrates attention",
    "preset": {
     "Q": [
      [
-      3,
-      3,
-      3
+      2,
+      0,
+      0
      ],
      [
       0,
-      2,
+      1,
       0
      ]
     ],
     "K": [
      [
-      3,
-      3,
-      3
-     ],
-     [
-      0,
+      2,
       0,
       0
      ],
      [
       0,
-      0,
+      1,
       0
+     ],
+     [
+      0,
+      0,
+      1
      ]
     ],
     "V": [
@@ -400,45 +387,44 @@
       1
      ]
     ],
-    "scale": true,
-    "temperature": 1
+    "scaled": true
    },
-   "change": "Give q1 a large dot product with k1 (preset), then toggle 'Divide scores by sqrt(d_k)' off.",
-   "observe": "With scaling on, z1 = 27/sqrt(3) = 15.59 and the weight on k1 is about 1.0 (maxWeight ~ 1). With scaling off, z1 = 27, the softmax is even more saturated, and the output row for q1 stays essentially v1 = (1, 0).",
-   "why": "Dividing by sqrt(d_k) shrinks logits so softmax keeps usable gradients; without it, large d_k pushes softmax into a near one-hot region."
+   "change": "Make query row 1 align with key row 1 (Q = [[2,0,0],[0,1,0]], K = [[2,0,0],[0,1,0],[0,0,1]]).",
+   "observe": "Row 1 scores are [4, 0, 0]; after scaling by sqrt(3) the weights are about [0.834, 0.083, 0.083], so the output row is close to v1 = [1, 0].",
+   "why": "A large positive score dominates the softmax, so that value row supplies most of the output."
   }
  ],
  "misconception": {
   "title": "Common misunderstanding",
-  "text": "The $1/\\sqrt{d_k}$ factor is not a normalization of the output or of the values. It only rescales the logits before softmax; the weights still sum to 1 either way, but their sharpness changes. The paper's footnote 1 shows why: for independent unit-variance components, $q\\cdot k$ has variance $d_k$, so the logits grow like $\\sqrt{d_k}$ unless divided by it."
+  "text": "The attention weights are not the output. They are a probability distribution over the value rows; the output is the weighted average A V. Also, scaling does not change the ranking of scores, only their spread, which is what keeps softmax from saturating."
  },
  "checks": [
   {
-   "name": "Each attention row sums to 1",
-   "test": "r.rowSums.every(function(s){return Math.abs(s-1)<1e-9;})",
+   "name": "Each weight row sums to 1",
+   "test": "r.rowSums.every(function (s) { return Math.abs(s - 1) < 1e-9; })",
    "show": "r.rowSums[0]",
    "id": "c1"
   },
   {
    "name": "Output equals weighted sum of V",
-   "test": "(function(){for(var i=0;i<r.nq;i++){for(var c=0;c<r.dv;c++){var acc=0;for(var j=0;j<r.nk;j++)acc+=r.A[i][j]*p.V[j][c];if(Math.abs(acc-r.O[i][c])>1e-9)return false;}}return true;})()",
-   "show": "r.O[0][0]",
+   "test": "(function () { for (var i = 0; i < r.n; i++) for (var t = 0; t < r.dv; t++) { var s = 0; for (var j = 0; j < r.m; j++) s += r.weights[i][j] * p.V[j][t]; if (Math.abs(s - r.output[i][t]) > 1e-9) return false; } return true; })()",
+   "show": "r.output[0][0]",
    "id": "c2"
   },
   {
    "name": "Weights are non-negative",
-   "test": "r.flatA.every(function(a){return a>=0;})",
-   "show": "r.maxWeight",
+   "test": "r.weights.every(function (row) { return row.every(function (w) { return w >= 0; }); })",
+   "show": "r.maxWeight[0]",
    "id": "c3"
   },
   {
-   "name": "Scaling divides raw scores by sqrt(d_k)",
-   "test": "Math.abs(r.Z[0][0] - r.S[0][0]/(p.scale?Math.sqrt(r.dk):1)/p.temperature) < 1e-9",
-   "show": "r.denom",
+   "name": "Scaling divides scores by sqrt(d_k)",
+   "test": "Math.abs(r.scaledScores[0][0] - r.scores[0][0] / r.scale) < 1e-9",
+   "show": "r.scale",
    "id": "c4"
   },
   {
-   "name": "Uniform keys give uniform weights (worked example)",
+   "name": "Equal scores give uniform weights",
    "params": {
     "Q": [
      [
@@ -448,7 +434,7 @@
      ],
      [
       0,
-      2,
+      1,
       0
      ]
     ],
@@ -483,26 +469,79 @@
       1
      ]
     ],
-    "scale": true,
-    "temperature": 1
+    "scaled": true
    },
-   "test": "Math.abs(r.A[0][0]-1/3)<1e-9 && Math.abs(r.A[0][1]-1/3)<1e-9 && Math.abs(r.A[0][2]-1/3)<1e-9",
-   "show": "r.A[0][0]",
+   "test": "Math.abs(r.weights[0][0] - 1 / 3) < 1e-9 && Math.abs(r.weights[0][1] - 1 / 3) < 1e-9 && Math.abs(r.weights[0][2] - 1 / 3) < 1e-9",
+   "show": "r.weights[0][0]",
    "id": "c5"
+  },
+  {
+   "name": "Unscaled scores equal raw dot products",
+   "params": {
+    "Q": [
+     [
+      1,
+      0,
+      1
+     ],
+     [
+      0,
+      1,
+      0
+     ]
+    ],
+    "K": [
+     [
+      1,
+      1,
+      0
+     ],
+     [
+      0,
+      1,
+      1
+     ],
+     [
+      1,
+      0,
+      1
+     ]
+    ],
+    "V": [
+     [
+      1,
+      0
+     ],
+     [
+      0,
+      1
+     ],
+     [
+      1,
+      1
+     ]
+    ],
+    "scaled": false
+   },
+   "test": "Math.abs(r.scaledScores[0][0] - 1) < 1e-9 && Math.abs(r.scaledScores[0][1] - 1) < 1e-9 && Math.abs(r.scaledScores[0][2] - 2) < 1e-9",
+   "show": "r.scaledScores[0][2]",
+   "id": "c6"
   }
  ],
  "grounding": {
   "from_paper": [
-   "Attention maps a query and a set of key-value pairs to an output, where the output is a weighted sum of the values and the weight is a compatibility function of the query with the key (Section 3.2).",
-   "The input consists of queries and keys of dimension d_k and values of dimension d_v; dot products are divided by sqrt(d_k) and softmax gives the weights (Section 3.2.1).",
+   "Attention maps a query and a set of key-value pairs to an output, where query, keys, values and output are all vectors (Section 3.2).",
+   "The output is a weighted sum of the values, with weights from a compatibility function of the query with each key (Section 3.2).",
+   "Scaled dot-product attention computes dot products of the query with all keys, divides each by sqrt(d_k), and applies softmax to obtain the weights on the values (Section 3.2.1).",
    "Attention(Q,K,V) = softmax(QK^T/sqrt(d_k))V (Eq. 1).",
-   "For independent unit-variance components, the dot product has mean 0 and variance d_k, so scaling counteracts large logits (footnote 1)."
+   "Dot-product attention is identical to the algorithm except for the scaling factor 1/sqrt(d_k) (Section 3.2.1).",
+   "For large d_k the dot products grow large in magnitude, pushing softmax into regions with extremely small gradients; the paper scales by 1/sqrt(d_k) to counteract this (Section 3.2.1)."
   ],
   "our_simplifications": [
-   "We use tiny editable matrices (2 queries, 3 keys, d_k = 3, d_v = 2) instead of the paper's d_k = d_v = 64 and h = 8 heads.",
-   "We add a softmax temperature T (default 1) purely as a teaching knob; the paper uses T = 1.",
-   "The sweep view varies T rather than d_k because d_k is fixed by the matrix shape in this toy.",
-   "No training, masking, positional encoding, or multi-head projection is shown."
+   "We use tiny editable matrices (2 queries, 3 keys, d_k = 3, d_v = 2) instead of the paper's d_k = d_v = 64 and d_model = 512.",
+   "We show a single attention head, not the 8-head multi-head attention of Section 3.2.2.",
+   "The sweep over d_k is a toy illustration of the variance argument in footnote 1; it is not a paper experiment.",
+   "No training, masking, or positional encoding is included."
   ],
   "quotes": [
    "We compute the dot products of the query with all keys, divide each by $\\sqrt{d_{k}}$ , and apply a softmax function to obtain the weights on the values.",
