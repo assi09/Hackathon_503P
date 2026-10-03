@@ -11,6 +11,8 @@ from typing import Any, Callable
 
 import requests
 
+from guard import DeadlineExceeded, run_with_deadline
+
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 
@@ -88,15 +90,16 @@ class OpenRouter:
             t0 = time.monotonic()
             status, data, err = None, None, None
             try:
-                resp = requests.post(
-                    API_URL,
+                limit = min(timeout, 300)
+                resp = run_with_deadline(
+                    requests.post, limit, API_URL,
                     headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json",
                              "X-Title": "paper-explainer-agent"},
-                    json=body, timeout=(10, min(timeout, 300)),
+                    json=body, timeout=(10, limit),
                 )
                 status = resp.status_code
                 data = resp.json() if resp.content else None
-            except (requests.RequestException, ValueError) as exc:
+            except (requests.RequestException, ValueError, DeadlineExceeded) as exc:
                 err = f"{type(exc).__name__}: {exc}"
             seconds = round(time.monotonic() - t0, 2)
             usage = (data or {}).get("usage") or {}
