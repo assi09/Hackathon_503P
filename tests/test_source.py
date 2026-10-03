@@ -34,5 +34,21 @@ class SourceTests(unittest.TestCase):
         self.assertLessEqual(len(result), MAX_EXCERPT_CHARS)
 
 
+    def test_named_algorithm_outside_section_is_included(self):
+        filler = "Background sentence about optimisation methods. " * 60
+        text = ("Paper title\n" + filler + "\nAlgorithm 1: Our update rule. Require step size and decay rates.\n"
+                + filler + "\n2 Algorithm\nThe method keeps moving averages of the gradient.\n" + filler * 6)
+        ex = select_excerpt(SourceDocument(text, "pdf", "t"), "Section 2 and Algorithm 1: explain the update rule")
+        self.assertIn("2 Algorithm", ex)
+        self.assertIn("Algorithm 1: Our update rule", ex)
+
+    def test_appendix_and_multiple_sections(self):
+        filler = "Unrelated filler text for spacing purposes only. " * 80
+        text = ("Title\n" + filler + "\n3 Method\nCore method text.\n" + filler * 3
+                + "\nA.2 Derivation\nDerivation details here.\n" + filler * 3)
+        ex = select_excerpt(SourceDocument(text, "pdf", "t"), "Section 3 and Appendix A.2: method and derivation")
+        self.assertIn("Core method text", ex)
+        self.assertIn("Derivation details here", ex)
+
 if __name__ == "__main__":
     unittest.main()
