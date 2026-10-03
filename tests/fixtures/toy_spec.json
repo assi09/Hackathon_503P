@@ -1,0 +1,39 @@
+{
+  "plan": {"concept": "Weighted average", "learning_outcomes": ["see weights normalize"], "visual_strategy": "bars + table", "misconception": "weights need not sum to one"},
+  "title": "Weighted averages of $x_i$",
+  "paper": {"title": "Toy fixture", "authors": "Test", "year": "2026", "section": "Section 1", "equation": "Eq. (1)"},
+  "idea": "A weighted average $\\bar{x} = \\sum_i w_i x_i$ mixes values by importance.",
+  "why_it_matters": "It shows up **everywhere**.",
+  "equations": [{"latex": "\\bar{x} = \\frac{\\sum_i a_i x_i}{\\sum_j a_j}", "caption": "Normalized weighted average"}],
+  "symbols": [{"symbol": "x_i", "meaning": "value $i$"}, {"symbol": "a_i", "meaning": "raw weight"}],
+  "walkthrough": ["Pick raw weights.", "Normalize them.", "Mix the values."],
+  "params": [
+    {"id": "n", "type": "number", "label": "Number of items $n$", "min": 1, "max": 6, "step": 1, "default": 3},
+    {"id": "a", "type": "vector", "label": "Raw weights $a_i$", "symbol": "a", "length": "n", "min": 0, "max": 10, "step": 0.5, "default": [1, 2, 3], "fill": 1},
+    {"id": "sharp", "type": "number", "label": "Sharpness $\\beta$", "min": 0, "max": 4, "step": 0.1, "default": 1},
+    {"id": "square", "type": "toggle", "label": "Square the weights", "default": false},
+    {"id": "mode", "type": "select", "label": "Values", "options": [{"value": "lin", "label": "1, 2, 3, …"}, {"value": "sq", "label": "1, 4, 9, …"}], "default": "lin"},
+    {"id": "M", "type": "matrix", "label": "Matrix $M$", "rows": 2, "cols": "n", "min": -5, "max": 5, "step": 1, "default": [[1, 0, -1], [2, 2, 2]]}
+  ],
+  "compute": "function compute(p) { var n = p.n; var x = []; for (var i = 0; i < n; i++) x.push(p.mode === 'sq' ? (i+1)*(i+1) : i+1); var a = p.a.map(function(v){ var s = Math.pow(Math.max(v,0), p.sharp); return p.square ? s*s : s; }); var tot = a.reduce(function(s,v){return s+v;},0); var w = tot > 0 ? a.map(function(v){return v/tot;}) : a.map(function(){return 1/n;}); var contrib = w.map(function(v,i){return v*x[i];}); var mean = contrib.reduce(function(s,v){return s+v;},0); var xs=[], ys=[]; for (var t=0;t<=20;t++){ xs.push(t/5); ys.push(Math.pow(t/5, p.sharp)); } return { x: x, w: w, contrib: contrib, mean: mean, total: tot, labels: x.map(function(v,i){return 'item '+(i+1);}), M: p.M, xs: xs, ys: ys, warning: tot > 0 ? null : 'All weights are zero, so equal weights are used.' }; }",
+  "views": [
+    {"type": "pipeline", "title": "From raw weights to the mean", "steps": [{"label": "Raw weights", "key": "a"}, {"label": "Normalized $w_i$", "key": "w", "latex": "w_i = a_i / \\sum a"}, {"label": "Mean", "key": "mean"}]},
+    {"type": "bars", "title": "Weights vs contributions", "series": [{"key": "w", "label": "weight"}, {"key": "contrib", "label": "contribution"}], "labels": "labels", "y_label": "value"},
+    {"type": "heatmap", "title": "Matrix M", "value": "M", "row_sums": true},
+    {"type": "readout", "title": "Result", "items": [{"label": "Mean $\\bar{x}$", "key": "mean"}, {"label": "Total raw weight", "key": "total"}]},
+    {"type": "table", "title": "Per item", "columns": [{"label": "$x_i$", "key": "x"}, {"label": "$w_i$", "key": "w"}, {"label": "$w_i x_i$", "key": "contrib"}], "row_labels": "labels", "footer": [{"label": "Sum = mean", "key": "mean"}]},
+    {"type": "sweep", "title": "Mean as sharpness changes", "x_param": "sharp", "y": [{"key": "mean", "label": "mean"}], "y_label": "mean"},
+    {"type": "curve", "title": "Power curve", "x": "xs", "y": [{"key": "ys", "label": "t^β"}], "x_label": "t", "y_label": "t^β"},
+    {"type": "svg", "id": "v_svg", "title": "Diagram", "code": "function draw(p, r) { var s = '<svg viewBox=\"0 0 300 60\" xmlns=\"http://www.w3.org/2000/svg\">'; r.w.forEach(function(w,i){ s += '<rect x=\"'+(10+i*45)+'\" y=\"'+(50-40*w)+'\" width=\"30\" height=\"'+(40*w)+'\" fill=\"#2563eb\"/>'; }); return s + '</svg>'; }"}
+  ],
+  "explorations": [
+    {"title": "Equal weights", "preset": {"n": 4, "a": [1, 1, 1, 1]}, "change": "Set all weights equal.", "observe": "The mean is the plain average.", "why": "Each $w_i = 1/n$."},
+    {"title": "One dominant weight", "preset": {"a": [0, 0, 9], "sharp": 2}, "change": "Make one weight large.", "observe": "The mean moves to that value.", "why": "Its $w_i$ approaches 1."}
+  ],
+  "misconception": {"title": "Common misunderstanding", "text": "Raw weights do not need to sum to one; normalization handles it."},
+  "checks": [
+    {"name": "Weights sum to 1", "test": "Math.abs(r.w.reduce(function(s,v){return s+v;},0) - 1) < 1e-9", "show": "r.w.reduce(function(s,v){return s+v;},0)"},
+    {"name": "Equal weights give the plain average of 1..4", "params": {"n": 4, "a": [2, 2, 2, 2], "sharp": 1, "square": false, "mode": "lin"}, "test": "Math.abs(r.mean - 2.5) < 1e-9", "show": "r.mean"}
+  ],
+  "grounding": {"from_paper": ["Eq. (1) defines a weighted mean."], "our_simplifications": ["Values are 1..n."], "quotes": []}
+}
