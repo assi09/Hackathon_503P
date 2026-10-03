@@ -108,8 +108,13 @@ def _client_spec(spec: dict) -> dict:
     }
 
 
-def _fn(code: str) -> str:
-    return "(" + code.strip().rstrip(";") + ")"
+def _fn(code: str, name: str = "compute") -> str:
+    """Turn generated code into a function expression. Accepts a bare function expression,
+    an arrow function, or a named function declared together with helper functions."""
+    code = code.strip().rstrip(";")
+    if re.search(rf"\bfunction\s+{name}\s*\(", code):
+        return f"(function () {{\n{code};\nreturn {name};\n}})()"
+    return "(" + code + ")"
 
 
 def _expr_fn(expr: str) -> str:
@@ -127,7 +132,7 @@ def code_bundle(spec: dict) -> str:
         for c in spec.get("checks", [])
     )
     draws = ",\n    ".join(
-        f"{json.dumps(v['id'])}: {_fn(v['code'])}" for v in spec["views"] if v.get("type") == "svg" and v.get("code")
+        f"{json.dumps(v['id'])}: {_fn(v['code'], 'draw')}" for v in spec["views"] if v.get("type") == "svg" and v.get("code")
     )
     js = (
         "window.__explainer = (function () {\n  \"use strict\";\n"
@@ -140,7 +145,12 @@ def code_bundle(spec: dict) -> str:
 
 
 def _script_safe(s: str) -> str:
-    return re.sub(r"</(script)", r"<\\/\1", s, flags=re.I)
+    s = re.sub(r"</(script)", r"<\\/\1", s, flags=re.I)
+    return s.replace("<!--", "<\\!--")
+
+
+def _json_in_script(obj: Any) -> str:
+    return json.dumps(obj, ensure_ascii=False).replace("<", "\\u003c").replace(">", "\\u003e")
 
 
 def _list(items: list, cls: str = "") -> str:
@@ -151,10 +161,11 @@ def render_page(spec: dict, case: dict, source_note: str) -> str:
     css = (TEMPLATES / "style.css").read_text(encoding="utf-8")
     runtime = (TEMPLATES / "runtime.js").read_text(encoding="utf-8")
     paper = spec.get("paper", {})
-    src = html.escape(case["source_url"], quote=True)
+    url_ok = re.match(r"https?://", case["source_url"], re.I) is not None
+    src = html.escape(case["source_url"] if url_ok else "#", quote=True)
     paper_line = " · ".join(html.escape(str(x)) for x in
                             (paper.get("title"), paper.get("authors"), paper.get("year")) if x)
-    where = " · ".join(html.escape(str(x)) for x in (paper.get("section"), paper.get("equation")) if x)
+    where = " · ".join(rich(x) for x in (paper.get("section"), paper.get("equation")) if x)
 
     eqs = "".join(
         f"<figure class='equation'>{math_html(e['latex'], display=True)}"
@@ -246,7 +257,7 @@ def render_page(spec: dict, case: dict, source_note: str) -> str:
 <main>
 {body}
 </main>
-<script type="application/json" id="spec-data">{_script_safe(json.dumps(_client_spec(spec), ensure_ascii=False))}</script>
+<script type="application/json" id="spec-data">{_json_in_script(_client_spec(spec))}</script>
 <script>
 {_script_safe(code_bundle(spec))}
 </script>

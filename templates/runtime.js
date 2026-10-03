@@ -238,6 +238,14 @@
     return [];
   }
   function bars(v, r, box) {
+    var list = seriesList(v);
+    if (list.length && list.every(function (s) { return isNum(lookup(r, s.key)); })) {
+      // Each series is one number: draw one bar per key, labelled by the series label.
+      var vals = list.map(function (s) { return lookup(r, s.key); });
+      var labs = list.map(function (s) { return String(s.label || s.key).replace(/<[^>]*>/g, ""); });
+      r = Object.assign({}, r, { __bars_vals: vals, __bars_labels: labs });
+      v = Object.assign({}, v, { series: [{ key: "__bars_vals", label: v.value_label || "" }], labels: "__bars_labels" });
+    }
     var series = seriesList(v).map(function (s) { return { s: s, data: lookup(r, s.key) || [] }; });
     var n = Math.max.apply(null, series.map(function (x) { return x.data.length; }).concat([0]));
     if (!n) { box.appendChild(el("p", { "class": "muted" }, "No values to show.")); return; }
@@ -399,6 +407,7 @@
     });
     add(s, "line", { x1: L, x2: W - R, y1: T + ph, y2: T + ph, "class": "axis" });
     add(s, "line", { x1: L, x2: L, y1: T, y2: T + ph, "class": "axis" });
+    var discrete = opt.discrete || (xs.length <= 40 && fx.every(function (x) { return Number.isInteger(x); }));
     ys.forEach(function (y, k) {
       var d = "", pen = false;
       xs.forEach(function (x, i) {
@@ -407,7 +416,16 @@
         d += (pen ? "L" : "M") + X(x).toFixed(1) + " " + Y(Math.max(y0, Math.min(y1, v))).toFixed(1);
         pen = true;
       });
-      add(s, "path", { d: d, fill: "none", stroke: y.color || PALETTE[k % PALETTE.length], "stroke-width": 2.4 });
+      var color = y.color || PALETTE[k % PALETTE.length];
+      if (discrete) {  // values exist only at these x: faint guide line plus a dot per point
+        add(s, "path", { d: d, fill: "none", stroke: color, "stroke-width": 1, "stroke-dasharray": "3 3", opacity: 0.5 });
+        xs.forEach(function (x, i) {
+          var v = y.data[i];
+          if (isNum(v) && isFinite(v) && isFinite(x)) add(s, "circle", { cx: X(x), cy: Y(Math.max(y0, Math.min(y1, v))), r: 3.5, fill: color });
+        });
+      } else {
+        add(s, "path", { d: d, fill: "none", stroke: color, "stroke-width": 2.4 });
+      }
     });
     if (opt.markerX != null && isFinite(opt.markerX)) {
       add(s, "line", { x1: X(opt.markerX), x2: X(opt.markerX), y1: T, y2: T + ph, "class": "marker" });
@@ -457,7 +475,7 @@
     var fn = CODE.draw && CODE.draw[v.id];
     if (!fn) return;
     var out = fn(clone(state), r);
-    if (typeof out === "string" && /^\s*<svg[\s>]/i.test(out) && !/<script|\son\w+\s*=|href\s*=\s*["']?(https?:|javascript:)/i.test(out)) {
+    if (typeof out === "string" && /^\s*<svg[\s>]/i.test(out) && !/<\s*(script|foreignObject|iframe|image|use|a|style)\b|\son\w+\s*=|href\s*=|url\s*\(/i.test(out)) {
       var holder = el("div", { "class": "custom-svg" }, out);
       box.appendChild(holder);
     } else {
