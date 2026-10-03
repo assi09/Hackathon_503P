@@ -128,7 +128,8 @@ class OpenRouter:
             )
             if not err and content:
                 return content
-            transient = status is None or status in (408, 429, 500, 502, 503, 504) or not content
+            # Retry only temporary failures; a rejected URL or bad request will not succeed on a second try.
+            transient = status in (None, 408, 429, 500, 502, 503, 504) or (status == 200 and not content and not err)
             if attempts >= 2 or not transient:
                 raise LLMError(err or "empty completion")
             time.sleep(2)
