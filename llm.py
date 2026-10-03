@@ -112,6 +112,7 @@ class OpenRouter:
             self.record(
                 stage, "llm_call", "ok" if not err and content else "error",
                 request_index=b.requests, attempt=attempts, model=self.model,
+                served_model=(data or {}).get("model"),
                 generation_id=(data or {}).get("id"), provider=(data or {}).get("provider"),
                 http_status=status, call_seconds=seconds, max_tokens=cap,
                 prompt_tokens=pt, completion_tokens=ct,
