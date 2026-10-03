@@ -1,0 +1,146 @@
+[
+  {
+    "case": "equal scores",
+    "scaling": true,
+    "quantity": "raw scores",
+    "passed": true
+  },
+  {
+    "case": "equal scores",
+    "scaling": true,
+    "quantity": "scaled scores",
+    "passed": true
+  },
+  {
+    "case": "equal scores",
+    "scaling": true,
+    "quantity": "weights",
+    "passed": true
+  },
+  {
+    "case": "equal scores",
+    "scaling": true,
+    "quantity": "weighted output",
+    "passed": true
+  },
+  {
+    "case": "equal scores",
+    "scaling": false,
+    "quantity": "raw scores",
+    "passed": true
+  },
+  {
+    "case": "equal scores",
+    "scaling": false,
+    "quantity": "scaled scores",
+    "passed": true
+  },
+  {
+    "case": "equal scores",
+    "scaling": false,
+    "quantity": "weights",
+    "passed": true
+  },
+  {
+    "case": "equal scores",
+    "scaling": false,
+    "quantity": "weighted output",
+    "passed": true
+  },
+  {
+    "case": "dominant match",
+    "scaling": true,
+    "quantity": "raw scores",
+    "passed": true
+  },
+  {
+    "case": "dominant match",
+    "scaling": true,
+    "quantity": "scaled scores",
+    "passed": true
+  },
+  {
+    "case": "dominant match",
+    "scaling": true,
+    "quantity": "weights",
+    "passed": true
+  },
+  {
+    "case": "dominant match",
+    "scaling": true,
+    "quantity": "weighted output",
+    "passed": true
+  },
+  {
+    "case": "dominant match",
+    "scaling": false,
+    "quantity": "raw scores",
+    "passed": true
+  },
+  {
+    "case": "dominant match",
+    "scaling": false,
+    "quantity": "scaled scores",
+    "passed": true
+  },
+  {
+    "case": "dominant match",
+    "scaling": false,
+    "quantity": "weights",
+    "passed": true
+  },
+  {
+    "case": "dominant match",
+    "scaling": false,
+    "quantity": "weighted output",
+    "passed": true
+  },
+  {
+    "case": "mixed signs",
+    "scaling": true,
+    "quantity": "raw scores",
+    "passed": true
+  },
+  {
+    "case": "mixed signs",
+    "scaling": true,
+    "quantity": "scaled scores",
+    "passed": true
+  },
+  {
+    "case": "mixed signs",
+    "scaling": true,
+    "quantity": "weights",
+    "passed": true
+  },
+  {
+    "case": "mixed signs",
+    "scaling": true,
+    "quantity": "weighted output",
+    "passed": true
+  },
+  {
+    "case": "mixed signs",
+    "scaling": false,
+    "quantity": "raw scores",
+    "passed": true
+  },
+  {
+    "case": "mixed signs",
+    "scaling": false,
+    "quantity": "scaled scores",
+    "passed": true
+  },
+  {
+    "case": "mixed signs",
+    "scaling": false,
+    "quantity": "weights",
+    "passed": true
+  },
+  {
+    "case": "mixed signs",
+    "scaling": false,
+    "quantity": "weighted output",
+    "passed": true
+  }
+]

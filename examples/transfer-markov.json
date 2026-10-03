@@ -1,0 +1,7 @@
+{
+  "source_url": "https://example.org/synthetic-markov-benchmark",
+  "paper_title": "Synthetic transfer benchmark: two-state Markov dynamics (not a research paper)",
+  "excerpt": "Synthetic source text for testing generalization beyond the public examples. Let p_t be the probability of state A at discrete time t. Each step switches A to B with probability a and B to A with probability b. Then p_(t+1)=(1-a)p_t+b(1-p_t). Equivalently the row-vector state distribution is multiplied by the row-stochastic matrix [[1-a,a],[b,1-b]]. For a+b>0 the stationary probability of A is b/(a+b). Convergence from every initial distribution requires |1-a-b|<1. If a=b=0 the distribution stays at its initial value. If a=b=1 the probability generally oscillates with period two.",
+  "focus": "Explain probability flowing between two states. Let learners vary initial probability and both transition probabilities. Show a labeled state-transition diagram, trajectory over 20 steps, and the limiting probability when convergence applies. Guide a stable equilibrium and a period-two oscillation. Preserve total probability and handle the identity-transition boundary.",
+  "audience": "Engineering undergraduate who knows probability vectors"
+}

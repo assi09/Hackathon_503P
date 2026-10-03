@@ -1,0 +1,2 @@
+# Optional development checks only. Not needed by the submitted agent.
+playwright==1.63.0

@@ -1,0 +1,7 @@
+{
+  "source_url": "https://arxiv.org/html/1706.03762v7",
+  "paper_title": "Attention Is All You Need",
+  "excerpt": "Practice excerpt, paraphrased from Section 3.2.1, Equation (1): Attention(Q,K,V) = softmax(Q K^T / sqrt(d_k)) V. Each query and key has d_k components. Dot products measure compatibility between each query and each key. Divide those scores by sqrt(d_k), then apply softmax across the keys for each query to obtain the weights used to combine the value vectors. Queries, keys and values are arranged as rows of Q, K and V. The output contains one weighted combination of values per query. The authors motivate scaling by noting that large dot products can push softmax into regions with very small gradients. Under independent, zero-mean, unit-variance query and key components, the dot-product variance is d_k.",
+  "focus": "Explain scaled dot-product attention with small, editable Q, K, V matrices. Show similarity scores, normalized attention weights, and the output. Let the learner edit matrix values and switch scaling on/off. Guide equal scores and a dominant score. Check every weights row sums to one and output equals the weighted sum of V. Do not train a Transformer.",
+  "audience": "Engineering undergraduate familiar with matrices but new to attention"
+}

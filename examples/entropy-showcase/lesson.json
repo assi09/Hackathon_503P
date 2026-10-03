@@ -1,0 +1,226 @@
+{
+  "title": "Discrete Entropy in Bits",
+  "subtitle": "Compute average uncertainty H = -Σ pᵢ log₂ pᵢ for an editable probability distribution and see how certainty, uniformity, and zero-probability outcomes behave.",
+  "intro": "Shannon's entropy measures how uncertain we are about the next symbol from a discrete source before we observe it. Each outcome with probability pᵢ contributes -pᵢ log₂ pᵢ bits to the average; likely outcomes contribute little, rare outcomes contribute more, and impossible outcomes contribute nothing. The total H is the average number of yes/no questions needed to identify the outcome. Certainty (one outcome with probability 1) gives H = 0 bits, while n equally likely outcomes give H = log₂ n bits, the maximum for that n. This lesson lets you edit the probabilities and the number of outcomes and watch each term and the total change.",
+  "plan": [
+    "Let the learner edit a probability vector directly, including its length, so both the values and n are inputs.",
+    "Show each outcome's individual contribution -pᵢ log₂ pᵢ alongside the running total H.",
+    "Contrast the certain distribution (H = 0) with the uniform distribution (H = log₂ n) as the two boundary cases.",
+    "Handle pᵢ = 0 by treating its contribution as 0 via the continuous limit, and flag non-normalized vectors explicitly."
+  ],
+  "equation": "H = -Σᵢ pᵢ log₂ pᵢ  (bits), with 0·log₂0 ≡ 0",
+  "symbols": [
+    {
+      "symbol": "n",
+      "meaning": "number of possible outcomes (dimensionless count)"
+    },
+    {
+      "symbol": "pᵢ",
+      "meaning": "probability of outcome i, nonnegative, Σ pᵢ = 1 (dimensionless)"
+    },
+    {
+      "symbol": "H",
+      "meaning": "average uncertainty of the source, in bits"
+    },
+    {
+      "symbol": "log₂",
+      "meaning": "base-two logarithm, so H is measured in bits"
+    }
+  ],
+  "source": {
+    "title": "A Mathematical Theory of Communication",
+    "locator": "Section 6",
+    "supported": [
+      "H = -K Σ pᵢ log pᵢ with base-two logs and K = 1 gives bits",
+      "probabilities are nonnegative and sum to one",
+      "a zero-probability term contributes zero via the limit of -p log p",
+      "entropy is zero for a certain outcome",
+      "for fixed n the uniform distribution maximizes entropy at log₂ n",
+      "entropy is average uncertainty before observing the outcome, not the information of each particular outcome"
+    ],
+    "simplifications": [
+      "The editable probability vector and its normalization check are our teaching device, not from the excerpt.",
+      "The bar chart of per-outcome contributions and the line chart of H versus n are our visual choices.",
+      "The excerpt is paraphrased practice text; no equation number or experimental result is claimed."
+    ]
+  },
+  "controls": [
+    {
+      "id": "probs",
+      "label": "Outcome probabilities",
+      "help": "Edit each pᵢ (0 to 1). Add or remove outcomes to change n. Values need not sum to 1; the lesson reports the sum and normalizes for display of the uniform comparison.",
+      "type": "vector",
+      "value": [
+        0.5,
+        0.25,
+        0.25
+      ],
+      "min": 0,
+      "max": 1,
+      "minItems": 1,
+      "maxItems": 8
+    },
+    {
+      "id": "normalize",
+      "label": "Normalize probabilities",
+      "help": "If on, divide the entered values by their sum before computing H, so the distribution is a valid probability vector. If off, H is computed on the raw values and flagged when they do not sum to 1.",
+      "type": "toggle",
+      "value": true
+    }
+  ],
+  "compute": "function compute(s) {\n  const raw = s.probs.slice();\n  const n = raw.length;\n  const sum = raw.reduce((a, b) => a + b, 0);\n  const normalize = !!s.normalize;\n  const validSum = Math.abs(sum - 1) < 1e-9;\n  const canNormalize = sum > 0;\n  const useNormalized = normalize && canNormalize;\n  const p = useNormalized ? raw.map(v => v / sum) : raw.slice();\n  const defined = useNormalized || validSum;\n\n  const contributions = p.map(v => (v > 0 ? -v * Math.log2(v) : 0));\n  const H = contributions.reduce((a, b) => a + b, 0);\n  const support = p.filter(v => v > 0).length;\n  const uniformH = support > 0 ? Math.log2(support) : 0;\n  const maxP = p.length ? Math.max(...p) : 0;\n  const minPositive = support ? Math.min(...p.filter(v => v > 0)) : 0;\n\n  const metrics = [\n    { label: \"Entropy H\", value: defined ? H : null, unit: \"bits\", defined: defined, reason: defined ? undefined : \"probabilities do not sum to 1 and normalization is off\" },\n    { label: \"Number of outcomes n\", value: n, unit: \"\", defined: true },\n    { label: \"Sum of probabilities\", value: sum, unit: \"\", defined: true },\n    { label: \"Uniform max log₂ n\", value: uniformH, unit: \"bits\", defined: true },\n    { label: \"H as fraction of max\", value: defined && uniformH > 0 ? H / uniformH : (defined ? 0 : null), unit: \"\", defined: defined, reason: defined ? undefined : \"H undefined\" }\n  ];\n\n  const steps = [\n    { label: \"Probability sum\", formula: \"Σ pᵢ\", value: sum, explanation: useNormalized ? \"Values were divided by this sum to normalize.\" : \"Raw sum; must equal 1 for a valid distribution.\" },\n    { label: \"Largest probability\", formula: \"max pᵢ\", value: maxP, explanation: \"A single pᵢ = 1 forces H = 0 (certainty).\" },\n    { label: \"Smallest positive pᵢ\", formula: \"min pᵢ > 0\", value: minPositive, explanation: \"Small positive probabilities contribute more per outcome.\" },\n    { label: \"Total entropy\", formula: \"H = -Σ pᵢ log₂ pᵢ\", value: defined ? H : \"undefined\", explanation: defined ? \"Sum of the per-outcome contributions.\" : \"Cannot compute H without a valid distribution.\" }\n  ];\n\n  const labels = p.map((_, i) => \"p\" + (i + 1));\n  const panels = [\n    { kind: \"bar\", title: \"Per-outcome contribution\", description: \"Each bar is -pᵢ log₂ pᵢ in bits; the total is H.\", labels: labels, values: contributions, unit: \"bits\" },\n    { kind: \"table\", title: \"Probabilities and terms\", description: \"Editable probabilities, their contributions, and the running total.\", columns: [\"Outcome\", \"pᵢ\", \"-pᵢ log₂ pᵢ (bits)\"], rows: p.map((v, i) => [\"p\" + (i + 1), v, contributions[i]]) },\n    { kind: \"line\", title: \"H vs n for uniform\", description: \"Maximum entropy log₂ n grows with the number of equally likely outcomes; your current H is marked by the bar chart.\", xLabel: \"n\", yLabel: \"log₂ n (bits)\", series: [{ name: \"uniform max\", points: Array.from({ length: 8 }, (_, k) => [k + 1, Math.log2(k + 1)]) }] }\n  ];\n\n  let message;\n  if (!defined) {\n    message = \"Probabilities sum to \" + sum.toFixed(4) + \", not 1, and normalization is off. Turn normalization on or adjust values so H is defined.\";\n  } else if (H < 1e-12) {\n    message = \"H = 0 bits: one outcome is certain, so there is no uncertainty before observing it.\";\n  } else if (Math.abs(H - uniformH) < 1e-9) {\n    message = \"H = log₂ n = \" + uniformH.toFixed(4) + \" bits: the distribution is uniform over its \" + support + \" positive outcomes, the maximum for that support.\";\n  } else {\n    message = \"H = \" + H.toFixed(4) + \" bits, below the uniform maximum of \" + uniformH.toFixed(4) + \" bits for \" + support + \" positive outcomes.\";\n  }\n\n  return { metrics: metrics, panels: panels, steps: steps, message: message };\n}",
+  "explorations": [
+    {
+      "title": "Certainty versus a fair coin",
+      "prediction": "Which distribution has larger H: one outcome with probability 1, or two outcomes each 0.5?",
+      "action": "Set the vector to [1] and read H, then set it to [0.5, 0.5] and read H again.",
+      "state": {
+        "probs": [
+          1
+        ],
+        "normalize": true
+      },
+      "observe": "With [1], H = 0 bits and the single contribution bar is zero. With [0.5, 0.5], H = 1 bit and both bars are 0.5 bits.",
+      "why": "A certain outcome carries no uncertainty, so -1·log₂1 = 0. Two equally likely outcomes each contribute 0.5 bits, summing to log₂2 = 1 bit."
+    },
+    {
+      "title": "Uniform maximum and a zero-probability outcome",
+      "prediction": "Does adding an impossible outcome change H, and does the uniform distribution reach log₂ n?",
+      "action": "Set the vector to [0.25, 0.25, 0.25, 0.25] and note H, then set it to [0.5, 0.5, 0] and compare.",
+      "state": {
+        "probs": [
+          0.5,
+          0.5,
+          0
+        ],
+        "normalize": true
+      },
+      "observe": "The four-way uniform vector gives H = 2 bits, matching log₂4. The vector [0.5, 0.5, 0] also gives H = 1 bit because the zero term contributes 0.",
+      "why": "For fixed n the uniform distribution maximizes entropy at log₂ n. A zero-probability outcome contributes -0·log₂0 ≡ 0 by the continuous limit, so it does not raise H."
+    }
+  ],
+  "limitations": [
+    "The excerpt is paraphrased practice text; no experimental reproduction or equation number is claimed.",
+    "Entropy is average uncertainty before observing the outcome, not the information content of any single observed symbol.",
+    "The normalization toggle is a teaching convenience; Shannon's definition assumes Σ pᵢ = 1.",
+    "The line chart shows log₂ n for n = 1 to 8 only, matching the control's maximum length."
+  ],
+  "tests": [
+    {
+      "name": "Certain outcome gives zero bits",
+      "state": {
+        "probs": [
+          1
+        ],
+        "normalize": true
+      },
+      "expect": [
+        {
+          "path": "metrics.0.value",
+          "value": 0,
+          "atol": 1e-08
+        }
+      ]
+    },
+    {
+      "name": "Four equally likely outcomes give two bits",
+      "state": {
+        "probs": [
+          0.25,
+          0.25,
+          0.25,
+          0.25
+        ],
+        "normalize": true
+      },
+      "expect": [
+        {
+          "path": "metrics.0.value",
+          "value": 2,
+          "atol": 1e-08
+        }
+      ]
+    },
+    {
+      "name": "Fair coin gives one bit",
+      "state": {
+        "probs": [
+          0.5,
+          0.5
+        ],
+        "normalize": true
+      },
+      "expect": [
+        {
+          "path": "metrics.0.value",
+          "value": 1,
+          "atol": 1e-08
+        }
+      ]
+    },
+    {
+      "name": "Zero-probability outcome contributes nothing",
+      "state": {
+        "probs": [
+          0.5,
+          0.5,
+          0
+        ],
+        "normalize": true
+      },
+      "expect": [
+        {
+          "path": "metrics.0.value",
+          "value": 1,
+          "atol": 1e-08
+        },
+        {
+          "path": "panels.0.values.2",
+          "value": 0,
+          "atol": 1e-08
+        }
+      ]
+    },
+    {
+      "name": "Non-normalized vector with normalization off is undefined",
+      "state": {
+        "probs": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "normalize": false
+      },
+      "expect": [
+        {
+          "path": "metrics.0.value",
+          "value": null
+        },
+        {
+          "path": "metrics.0.defined",
+          "value": false
+        }
+      ]
+    },
+    {
+      "name": "Uniform maximum equals log₂ n",
+      "state": {
+        "probs": [
+          0.2,
+          0.2,
+          0.2,
+          0.2,
+          0.2
+        ],
+        "normalize": true
+      },
+      "expect": [
+        {
+          "path": "metrics.0.value",
+          "formula": "Math.log2(s.probs.length)",
+          "atol": 1e-08
+        }
+      ]
+    }
+  ]
+}

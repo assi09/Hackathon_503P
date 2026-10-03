@@ -1,0 +1,7 @@
+{
+  "source_url": "https://example.org/synthetic-gradient-benchmark",
+  "paper_title": "Synthetic transfer benchmark: a quadratic descent step (not a research paper)",
+  "excerpt": "Synthetic source text for testing generalization beyond the public examples. For the one-dimensional quadratic f(x)=c x^2/2 with positive curvature c, its derivative is c x. Gradient descent with step size eta updates x_(t+1)=x_t-eta c x_t=(1-eta c)x_t. For any finite nonzero starting point, convergence to zero requires 0<eta c<2. At eta c=1 it reaches zero in one step. At eta c=2 it oscillates without decreasing magnitude. Above 2 its magnitude grows. This example describes a deterministic numerical iteration, not training a model or reproducing empirical results.",
+  "focus": "Explain how step size and curvature determine the behavior of quadratic gradient descent. Provide editable starting point, curvature and step size. Plot the objective and iteration trajectory, show intermediate gradient and update, and guide one-step convergence versus non-decaying oscillation. Display 12 steps with finite numerical output at all allowed control boundaries.",
+  "audience": "Engineering undergraduate familiar with calculus"
+}

@@ -1,0 +1,7 @@
+{
+  "source_url": "https://people.math.harvard.edu/~ctm/home/text/others/shannon/entropy/entropy.pdf",
+  "paper_title": "A Mathematical Theory of Communication",
+  "excerpt": "Practice excerpt, paraphrased from Section 6: For a discrete source with outcome probabilities p_1 through p_n, the uncertainty measure is H = -K sum_i p_i log(p_i). With base-two logarithms and K=1 it is measured in bits. Probabilities are nonnegative and sum to one. A term with probability zero contributes zero, using the continuous limit of -p log(p). Entropy is zero for a certain outcome. For a fixed number n of possible outcomes, the uniform distribution has the largest entropy, log_2(n). The measure describes average uncertainty before observing the outcome, not the information of every particular outcome.",
+  "focus": "Explain discrete entropy using a small probability distribution. Let the learner change the distribution and the number of outcomes. Show probabilities, individual contributions, and total entropy in bits. Compare a certain outcome with equally likely outcomes. Check certainty gives zero bits and four equally likely outcomes give two bits. Handle zero probabilities correctly.",
+  "audience": "Engineering undergraduate who knows basic probability and logarithms"
+}

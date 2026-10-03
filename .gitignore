@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+out/
+runs/
+.DS_Store
+.venv311/
+.python/
+
+/submission.zip

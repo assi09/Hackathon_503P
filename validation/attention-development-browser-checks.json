@@ -1,0 +1,52 @@
+[
+  {
+    "check": "offline_page_load",
+    "passed": true
+  },
+  {
+    "check": "DOM control: Q",
+    "passed": true
+  },
+  {
+    "check": "DOM control: K",
+    "passed": true
+  },
+  {
+    "check": "DOM control: V",
+    "passed": true
+  },
+  {
+    "check": "DOM control: scaled",
+    "passed": true
+  },
+  {
+    "check": "experiment 1",
+    "passed": true
+  },
+  {
+    "check": "experiment 2",
+    "passed": true
+  },
+  {
+    "check": "no horizontal page overflow at 390px",
+    "passed": true
+  },
+  {
+    "check": "no horizontal page overflow at 768px",
+    "passed": true
+  },
+  {
+    "check": "no browser errors",
+    "passed": true,
+    "errors": []
+  },
+  {
+    "check": "no external requests",
+    "passed": true,
+    "requests": []
+  },
+  {
+    "check": "locally served in Chromium",
+    "passed": true
+  }
+]

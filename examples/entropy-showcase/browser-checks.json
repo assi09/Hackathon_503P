@@ -1,0 +1,48 @@
+[
+  {
+    "check": "offline_page_load",
+    "passed": true
+  },
+  {
+    "check": "DOM control: probs",
+    "passed": true
+  },
+  {
+    "check": "DOM control: normalize",
+    "passed": true
+  },
+  {
+    "check": "DOM vector length: probs",
+    "passed": true
+  },
+  {
+    "check": "experiment 1",
+    "passed": true
+  },
+  {
+    "check": "experiment 2",
+    "passed": true
+  },
+  {
+    "check": "no horizontal page overflow at 390px",
+    "passed": true
+  },
+  {
+    "check": "no horizontal page overflow at 768px",
+    "passed": true
+  },
+  {
+    "check": "no browser errors",
+    "passed": true,
+    "errors": []
+  },
+  {
+    "check": "no external requests",
+    "passed": true,
+    "requests": []
+  },
+  {
+    "check": "locally served in Chromium",
+    "passed": true
+  }
+]

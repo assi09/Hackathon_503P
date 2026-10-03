@@ -1,0 +1,456 @@
+{
+  "title": "Scaled Dot-Product Attention",
+  "subtitle": "Compute similarity scores, normalize them into weights, and combine value vectors.",
+  "intro": "Attention lets each query look at every key, measure compatibility with a dot product, turn those scores into a probability distribution with softmax, and use that distribution to take a weighted average of the value vectors. The scaling factor 1/sqrt(d_k) keeps the scores from growing with dimension, which matters because very large scores make softmax nearly one-hot and its gradients tiny. This lesson uses tiny editable matrices so you can see every number and verify that each weight row sums to one and that each output row is exactly the weighted sum of the value rows.",
+  "plan": [
+    "Show the raw score matrix S = Q K^T and the scaled score matrix S/sqrt(d_k) side by side so the effect of scaling is visible.",
+    "Apply softmax row by row and display the resulting weight matrix with row sums.",
+    "Multiply the weight matrix by V and compare each output row with an explicit weighted sum of V rows.",
+    "Let the learner edit Q, K, V and toggle scaling to test equal-score and dominant-score regimes."
+  ],
+  "equation": "Attention(Q, K, V) = softmax(Q K^T / sqrt(d_k)) V",
+  "symbols": [
+    {
+      "symbol": "Q",
+      "meaning": "query matrix, shape n_q x d_k; each row is one query vector"
+    },
+    {
+      "symbol": "K",
+      "meaning": "key matrix, shape n_k x d_k; each row is one key vector"
+    },
+    {
+      "symbol": "V",
+      "meaning": "value matrix, shape n_k x d_v; each row is one value vector"
+    },
+    {
+      "symbol": "d_k",
+      "meaning": "number of components per query/key (dimension of the dot product)"
+    },
+    {
+      "symbol": "d_v",
+      "meaning": "number of components per value vector"
+    },
+    {
+      "symbol": "S",
+      "meaning": "raw score matrix Q K^T, shape n_q x n_k"
+    },
+    {
+      "symbol": "A",
+      "meaning": "attention weight matrix softmax(S / sqrt(d_k)), rows sum to 1"
+    },
+    {
+      "symbol": "O",
+      "meaning": "output matrix A V, shape n_q x d_v"
+    }
+  ],
+  "source": {
+    "title": "Attention Is All You Need",
+    "locator": "Section 3.2.1, Equation (1)",
+    "supported": [
+      "Attention(Q,K,V) = softmax(Q K^T / sqrt(d_k)) V",
+      "Dot products measure compatibility between each query and each key.",
+      "Scores are divided by sqrt(d_k) before softmax across keys for each query.",
+      "Queries, keys and values are arranged as rows of Q, K and V.",
+      "The output contains one weighted combination of values per query.",
+      "Large dot products can push softmax into regions with very small gradients.",
+      "Under independent zero-mean unit-variance query and key components, the dot-product variance is d_k."
+    ],
+    "simplifications": [
+      "We use tiny hand-editable matrices (default 2x2) instead of trained Transformer projections.",
+      "We do not train, use masks, multi-head splits, or positional encodings.",
+      "The scaling toggle is an instructional device to contrast scaled and unscaled softmax; the paper always scales."
+    ]
+  },
+  "controls": [
+    {
+      "id": "Q",
+      "label": "Query matrix Q",
+      "help": "Rows are queries, columns are d_k components. Edit entries or add/remove rows.",
+      "type": "matrix",
+      "value": [
+        [
+          1,
+          0
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "min": -5,
+      "max": 5
+    },
+    {
+      "id": "K",
+      "label": "Key matrix K",
+      "help": "Rows are keys, columns are d_k components. Number of columns must match Q.",
+      "type": "matrix",
+      "value": [
+        [
+          1,
+          0
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "min": -5,
+      "max": 5
+    },
+    {
+      "id": "V",
+      "label": "Value matrix V",
+      "help": "Rows are values, one per key. Number of rows must match K.",
+      "type": "matrix",
+      "value": [
+        [
+          1,
+          0
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "min": -5,
+      "max": 5
+    },
+    {
+      "id": "scale",
+      "label": "Apply 1/sqrt(d_k) scaling",
+      "help": "Toggle off to see unscaled softmax behavior.",
+      "type": "toggle",
+      "value": true
+    }
+  ],
+  "compute": "function compute(s) {\n  const Q = s.Q, K = s.K, V = s.V;\n  const nq = Q.length, dk = Q[0].length, nk = K.length, dv = V[0].length;\n  const scaleOn = !!s.scale;\n  const denom = scaleOn ? Math.sqrt(dk) : 1;\n  const S = [];\n  for (let i = 0; i < nq; i++) {\n    const row = [];\n    for (let j = 0; j < nk; j++) {\n      let dot = 0;\n      for (let c = 0; c < dk; c++) dot += Q[i][c] * K[j][c];\n      row.push(dot);\n    }\n    S.push(row);\n  }\n  const Z = S.map(r => r.map(v => v / denom));\n  const A = Z.map(row => {\n    const m = Math.max(...row);\n    const ex = row.map(v => Math.exp(v - m));\n    const sum = ex.reduce((a, b) => a + b, 0);\n    return ex.map(e => e / sum);\n  });\n  const O = [];\n  for (let i = 0; i < nq; i++) {\n    const row = [];\n    for (let c = 0; c < dv; c++) {\n      let acc = 0;\n      for (let j = 0; j < nk; j++) acc += A[i][j] * V[j][c];\n      row.push(acc);\n    }\n    O.push(row);\n  }\n  const rowSums = A.map(r => r.reduce((a, b) => a + b, 0));\n  const maxAbsErr = Math.max(...rowSums.map(s => Math.abs(s - 1)));\n  const scoreVar = dk;\n  const metrics = [\n    {label: 'd_k', value: dk, unit: 'components'},\n    {label: 'd_v', value: dv, unit: 'components'},\n    {label: 'Max |row sum - 1|', value: maxAbsErr, unit: ''},\n    {label: 'Score variance (theory)', value: scoreVar, unit: ''},\n    {label: 'Scaling factor', value: denom, unit: ''}\n  ];\n  const steps = [\n    {label: 'Raw scores S = Q K^T', formula: 'S[i][j] = sum_c Q[i][c] K[j][c]', value: JSON.stringify(S), explanation: 'Each entry is the dot product of query i with key j.'},\n    {label: 'Scaled scores Z = S / sqrt(d_k)', formula: 'Z = S / ' + denom.toFixed(4), value: JSON.stringify(Z.map(r => r.map(v => Number(v.toFixed(4))))), explanation: scaleOn ? 'Scaling keeps score magnitudes near unit variance when components are independent with unit variance.' : 'Scaling is off, so raw dot products feed softmax directly.'},\n    {label: 'Weights A = softmax(Z) row-wise', formula: 'A[i][j] = exp(Z[i][j]) / sum_k exp(Z[i][k])', value: JSON.stringify(A.map(r => r.map(v => Number(v.toFixed(4))))), explanation: 'Softmax turns each row of scores into a probability distribution over keys.'},\n    {label: 'Output O = A V', formula: 'O[i][c] = sum_j A[i][j] V[j][c]', value: JSON.stringify(O.map(r => r.map(v => Number(v.toFixed(4))))), explanation: 'Each output row is the attention-weighted average of the value rows.'}\n  ];\n  const panels = [\n    {kind: 'matrix', title: 'Raw scores S = Q K^T', description: 'Dot products before scaling.', rows: Q.map((_, i) => 'q' + i), columns: K.map((_, j) => 'k' + j), values: S},\n    {kind: 'matrix', title: 'Scaled scores Z', description: scaleOn ? 'S divided by sqrt(d_k).' : 'Scaling is off, so Z equals S.', rows: Q.map((_, i) => 'q' + i), columns: K.map((_, j) => 'k' + j), values: Z},\n    {kind: 'matrix', title: 'Attention weights A', description: 'Softmax applied across each row; every row sums to 1.', rows: Q.map((_, i) => 'q' + i), columns: K.map((_, j) => 'k' + j), values: A},\n    {kind: 'matrix', title: 'Output O = A V', description: 'Weighted combinations of value rows.', rows: Q.map((_, i) => 'q' + i), columns: V[0].map((_, c) => 'v' + c), values: O},\n    {kind: 'bar', title: 'Row sums of A', description: 'Each bar should be 1 for a valid softmax row.', labels: Q.map((_, i) => 'row ' + i), values: rowSums, unit: ''}\n  ];\n  const message = 'Each weight row sums to ' + rowSums.map(s => s.toFixed(4)).join(', ') + '. The output rows are the corresponding weighted sums of V rows. ' + (scaleOn ? 'Scaling by 1/sqrt(d_k) keeps scores from exploding as d_k grows.' : 'Without scaling, large dot products can make softmax nearly one-hot.');\n  return {metrics, panels, steps, message};\n}",
+  "explorations": [
+    {
+      "title": "Equal scores: uniform attention",
+      "prediction": "If every query has the same dot product with every key, what will the attention weights look like?",
+      "action": "Set Q = [[1,0],[1,0]], K = [[1,0],[1,0]], V = [[1,0],[0,1]], keep scaling on.",
+      "state": {
+        "Q": [
+          [
+            1,
+            0
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "K": [
+          [
+            1,
+            0
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "V": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
+        "scale": true
+      },
+      "observe": "Every entry of A becomes 0.5, and each output row is the average of the two value rows.",
+      "why": "Equal scores give equal exponentials, so softmax assigns uniform probability across keys."
+    },
+    {
+      "title": "Dominant score and the effect of scaling",
+      "prediction": "If one key has a much larger dot product than the other, how concentrated do the weights become with and without scaling?",
+      "action": "Set Q = [[3,0]], K = [[3,0],[0,1]], V = [[1,0],[0,1]]. Compare scale on versus off.",
+      "state": {
+        "Q": [
+          [
+            3,
+            0
+          ]
+        ],
+        "K": [
+          [
+            3,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
+        "V": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
+        "scale": false
+      },
+      "observe": "With scaling off, the first weight is near 1 and the second near 0; with scaling on, the distribution is less extreme.",
+      "why": "Dividing by sqrt(d_k) shrinks large scores, keeping softmax away from the saturated one-hot region where gradients are tiny."
+    }
+  ],
+  "limitations": [
+    "This is a single-head, unmasked attention computation on tiny matrices; it does not reproduce Transformer training or multi-head behavior.",
+    "The scaling toggle is a teaching contrast; the paper always uses 1/sqrt(d_k).",
+    "We assume Q, K, V are already projected; we do not compute learned projections.",
+    "The variance statement d_k assumes independent zero-mean unit-variance components, which our hand-edited matrices need not satisfy."
+  ],
+  "tests": [
+    {
+      "name": "Identity Q, K, V with scaling on gives identity-like output",
+      "state": {
+        "Q": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
+        "K": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
+        "V": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
+        "scale": true
+      },
+      "expect": [
+        {
+          "path": "metrics.2.value",
+          "value": 0,
+          "atol": 1e-08
+        },
+        {
+          "path": "panels.2.values.0.0",
+          "formula": "Math.exp(1/Math.sqrt(2)) / (Math.exp(1/Math.sqrt(2)) + Math.exp(0))",
+          "atol": 1e-08
+        }
+      ]
+    },
+    {
+      "name": "Equal scores produce uniform weights",
+      "state": {
+        "Q": [
+          [
+            1,
+            0
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "K": [
+          [
+            1,
+            0
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "V": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
+        "scale": true
+      },
+      "expect": [
+        {
+          "path": "panels.2.values.0.0",
+          "value": 0.5,
+          "atol": 1e-08
+        },
+        {
+          "path": "panels.2.values.0.1",
+          "value": 0.5,
+          "atol": 1e-08
+        },
+        {
+          "path": "panels.3.values.0.0",
+          "value": 0.5,
+          "atol": 1e-08
+        },
+        {
+          "path": "panels.3.values.0.1",
+          "value": 0.5,
+          "atol": 1e-08
+        }
+      ]
+    },
+    {
+      "name": "Output equals weighted sum of V rows",
+      "state": {
+        "Q": [
+          [
+            2,
+            1
+          ]
+        ],
+        "K": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
+        "V": [
+          [
+            3,
+            4
+          ],
+          [
+            5,
+            6
+          ]
+        ],
+        "scale": true
+      },
+      "expect": [
+        {
+          "path": "panels.3.values.0.0",
+          "formula": "(() => { const q=[2,1], k=[[1,0],[0,1]], v=[[3,4],[5,6]]; const dk=2; const s=k.map(kk=>q[0]*kk[0]+q[1]*kk[1]); const z=s.map(x=>x/Math.sqrt(dk)); const m=Math.max(...z); const e=z.map(x=>Math.exp(x-m)); const sum=e.reduce((a,b)=>a+b,0); const a=e.map(x=>x/sum); return a[0]*v[0][0]+a[1]*v[1][0]; })()",
+          "atol": 1e-08
+        },
+        {
+          "path": "panels.3.values.0.1",
+          "formula": "(() => { const q=[2,1], k=[[1,0],[0,1]], v=[[3,4],[5,6]]; const dk=2; const s=k.map(kk=>q[0]*kk[0]+q[1]*kk[1]); const z=s.map(x=>x/Math.sqrt(dk)); const m=Math.max(...z); const e=z.map(x=>Math.exp(x-m)); const sum=e.reduce((a,b)=>a+b,0); const a=e.map(x=>x/sum); return a[0]*v[0][1]+a[1]*v[1][1]; })()",
+          "atol": 1e-08
+        }
+      ]
+    },
+    {
+      "name": "Scaling off leaves raw scores in Z",
+      "state": {
+        "Q": [
+          [
+            3,
+            0
+          ]
+        ],
+        "K": [
+          [
+            3,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
+        "V": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
+        "scale": false
+      },
+      "expect": [
+        {
+          "path": "panels.1.values.0.0",
+          "value": 9,
+          "atol": 1e-08
+        },
+        {
+          "path": "panels.1.values.0.1",
+          "value": 0,
+          "atol": 1e-08
+        }
+      ]
+    },
+    {
+      "name": "Row sums of A are exactly 1",
+      "state": {
+        "Q": [
+          [
+            1,
+            2
+          ],
+          [
+            3,
+            4
+          ]
+        ],
+        "K": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
+        "V": [
+          [
+            1,
+            0
+          ],
+          [
+            0,
+            1
+          ]
+        ],
+        "scale": true
+      },
+      "expect": [
+        {
+          "path": "panels.4.values.0",
+          "value": 1,
+          "atol": 1e-08
+        },
+        {
+          "path": "panels.4.values.1",
+          "value": 1,
+          "atol": 1e-08
+        }
+      ]
+    }
+  ]
+}

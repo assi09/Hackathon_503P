@@ -1,0 +1,7 @@
+{
+  "source_url": "https://example.org/synthetic-bayes-benchmark",
+  "paper_title": "Synthetic transfer benchmark: Bayesian evidence (not a research paper)",
+  "excerpt": "Synthetic source text for testing generalization beyond the public examples. For two hypotheses A and not-A, Bayes' rule gives P(A|E)=P(E|A)P(A)/[P(E|A)P(A)+P(E|not-A)(1-P(A))]. The denominator is the marginal probability of evidence E. Multiplying prior odds by the likelihood ratio gives posterior odds whenever both odds and the ratio are defined. If the evidence probability is zero, conditional probability given that event is undefined; a numerical demo should explain this case rather than return an invented posterior.",
+  "focus": "Show how a prior probability and two evidence likelihoods combine into a posterior probability. Provide editable prior and likelihood controls, visualize the two unnormalized joint contributions and normalized posterior masses, and show the denominator. Guide uninformative evidence versus strongly discriminating evidence. Correctly explain impossible evidence and avoid division by zero.",
+  "audience": "Engineering undergraduate new to Bayesian inference"
+}
