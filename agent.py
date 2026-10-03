@@ -235,7 +235,7 @@ def main(argv: list[str] | None = None) -> int:
         trace.record("input", "validate case", "ok", **case, **({"truncated_fields": truncated} if truncated else {}))
         load_dotenv()
 
-        # 1. Source: fetch quickly; the assessment network may only allow OpenRouter.
+        # 1. Source: read source_url locally (HTML or PDF) within a hard time budget.
         excerpt, source_note = None, ""
         try:
             doc = load_source(case["source_url"])
@@ -248,17 +248,18 @@ def main(argv: list[str] | None = None) -> int:
             trace.record("source", "fetch and select excerpt", "ok", origin=doc.origin, format=doc.format,
                          document_chars=len(doc.text), excerpt_chars=len(excerpt), focus_relevance=round(score, 2))
         except SourceError as exc:
-            source_note = ("The source could not be downloaded during generation, so this explanation relies on "
-                           "the brief and the model's knowledge of the paper; verify details against the original.")
+            source_note = ("The source text could not be retrieved during generation. This page is built only from "
+                           "the brief; nothing here is attributed to the paper beyond what the brief states.")
             trace.record("source", "fetch and select excerpt", "unavailable", error=str(exc)[:300],
-                         fallback="model knowledge + focus brief")
+                         fallback="brief-only page; run reported as failed")
 
-        # 2. Plan + generate the spec in one call.
         client = OpenRouter(args.model, budget, trace.record)
+        brief = case["focus"] + " " + case["source_url"]
+        # 2. Plan + generate the spec in one call.
         spec = generate(client, trace, case, excerpt, source_note)
 
         # 3. Check, then repair only what failed.
-        rep = validate(spec, excerpt)
+        rep = validate(spec, excerpt, brief)
         trace.record("check", "validate spec (round 0)", "pass" if rep.ok else "fail", **report_dict(rep))
         rounds = 0
         while not rep.ok and rounds < MAX_REPAIRS:
@@ -268,7 +269,7 @@ def main(argv: list[str] | None = None) -> int:
             except (BudgetError, LLMError, ValueError, json.JSONDecodeError) as exc:
                 trace.record("revise", f"repair round {rounds}", "failed", error=str(exc)[:300])
                 break
-            new_rep = validate(candidate, excerpt)
+            new_rep = validate(candidate, excerpt, brief)
             trace.record("check", f"validate spec (round {rounds})", "pass" if new_rep.ok else "fail", **report_dict(new_rep))
             if severity(new_rep) <= severity(rep):
                 spec, rep = candidate, new_rep
@@ -276,7 +277,7 @@ def main(argv: list[str] | None = None) -> int:
                 trace.record("revise", f"repair round {rounds}", "rejected", reason="repair introduced more errors")
         if not rep.ok:
             spec = degrade(spec, rep)
-            rep = validate(spec, excerpt)
+            rep = validate(spec, excerpt, brief)
             trace.record("check", "validate after dropping failing checks/views", "pass" if rep.ok else "fail",
                          **report_dict(rep))
             structural = [e for e in rep.errors if e.startswith(("missing or invalid field 'compute'",
@@ -285,17 +286,25 @@ def main(argv: list[str] | None = None) -> int:
                 raise LLMError("spec still invalid: " + "; ".join(structural[:3]))
 
         # 4. Render and check the final artifact.
-        html = render_page(spec, case, source_note)
+        html = render_page(spec, case, source_note, source_ok=excerpt is not None)
         problems = check_html(html)
         trace.record("render", "write index.html and check artifact", "pass" if not problems else "fail",
                      bytes=len(html.encode()), problems=problems)
         (args.output / "index.html").write_text(html, encoding="utf-8")
         (args.output / "spec.json").write_text(json.dumps(spec, ensure_ascii=False, indent=1), encoding="utf-8")
         status = "ok" if rep.ok and not problems else "completed_with_failures"
+        if excerpt is None:
+            status = "failed_no_source"  # a brief-only page is written for partial credit, but the run did not succeed
         trace.record("run", "finish", status, requests=budget.requests, prompt_tokens=budget.prompt_tokens,
                      completion_tokens=budget.completion_tokens,
                      total_tokens=budget.prompt_tokens + budget.completion_tokens,
                      repairs=rounds, remaining_errors=rep.errors, seconds=round(time.monotonic() - started, 2))
+        if excerpt is None:
+            print("agent.py: source text could not be retrieved; wrote a brief-only page", file=sys.stderr)
+            return 1
+        if status != "ok":
+            print("agent.py: page written, but some checks still fail (see trace.jsonl)", file=sys.stderr)
+            return 2
         return 0
     except Exception as exc:  # any failure must still leave a trace and a nonzero exit
         trace.record("run", "finish", "failed", error=str(exc)[:500], requests=budget.requests,

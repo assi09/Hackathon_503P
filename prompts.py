@@ -24,19 +24,20 @@ JSON fields (in this order):
   {"type":"vector","length": int | "<id of a number param>","default":[0.5,0.3,0.2],"min","max","step","fill","symbol","labels":[str]?}
   {"type":"matrix","rows": int|"<param id>","cols": int|"<param id>","default":[[1,0],[0.5,2]],"min","max","step","fill","symbol","row_labels"?,"col_labels"?}
   EVERY param needs an explicit "default" of the right shape (vector = array, matrix = array of rows) with varied, meaningful values (never all zeros). Vectors/matrices resize automatically (new entries = fill) when their size param changes.
+  Never add a control for a quantity that other inputs already determine (e.g. a dimension equal to a matrix's column count): derive it in compute from the data, or make it the rows/cols/length control of that input. Never add a control that switches units (log base, degrees/radians, dB): use the units the brief and paper use.
   Every control state must be scientifically valid: if a formula needs a constraint (e.g. probabilities summing to 1, positive variance), enforce it inside compute (e.g. normalize raw weights and show the normalized values as an intermediate) rather than offering a switch that computes the formula on invalid inputs.
 "compute": str  -- "function compute(p) { ... return {...}; }". Pure ES5/ES2015 JS, no DOM, no Math.random, no external calls. p.<id> holds each param (vectors = arrays, matrices = arrays of rows). Return an object of named results: numbers, strings, booleans, arrays, arrays of arrays. Return EVERY intermediate quantity a learner should see, plus label arrays for charts. Return null (not Infinity/NaN) for a quantity that is undefined at some input (e.g. the surprisal of a zero-probability outcome) and say so in "warning". Must never throw or produce NaN/Infinity for any valid input: handle zeros, all-zero vectors (renormalize safely or fall back, and set "warning": "<explanation>" else warning: null), 0*log(0)=0, empty or 1-element cases. Use numerically stable formulas (e.g. subtract the max before exp). Do not round results.
 "views": 2-5 widgets that read compute results by key (keys may also name params). Reference ONLY keys that compute actually returns, spelled exactly; array-valued keys for bars/tables/curves (never "o1","o2"-style keys you did not return):
   {"type":"pipeline","title","steps":[{"label","key","latex"?,"note"?}]}   -- input -> intermediate -> output chain with live values; best for showing the mechanism's stages.
-  {"type":"bars","title","series":[{"key","label"}] (each key an array -> grouped bars, or each key a single number -> one bar per key),"labels":"<key of label array>","y_label","ymin"?,"ymax"?}
+  {"type":"bars","title","series":[{"key","label"}] (each key an array -> grouped bars; a matrix -> one bar group per row; or each key a single number -> one bar per key),"labels":"<key of label array>","y_label","ymin"?,"ymax"?}
   {"type":"heatmap","title","value":"<key of matrix>","row_labels":"<key>"|[..],"col_labels":"<key>"|[..],"row_sums":bool,"colormap":"sequential"|"diverging"}
-  {"type":"table","title","columns":[{"label","key","digits"?}],"row_labels":"<key>","row_header":str,"footer":[{"label","key"}]}
-  {"type":"readout","title","items":[{"label","key","unit"?,"note"?}]}
-  {"type":"sweep","title","x_param":"<number param id, or a vector param id plus \"x_index\": i to vary entry i>","y":[{"key":"<scalar result>","label"}],"x_label","y_label"}  -- re-runs compute across that param's range and marks the current value: shows cause and effect.
+  {"type":"table","title","columns":[{"label","key","digits"?}] (a column may be an array, or a matrix shown one row per table row),"row_labels":"<key>","row_header":str,"footer":[{"label","key"}]}
+  {"type":"readout","title","items":[{"label","key","unit"?,"unit_key"?,"note"?}]}
+  {"type":"sweep","title","x_param":"<number param id; or a vector id plus \"x_index\": i; or a matrix id plus \"x_index\": [row, col]> (never a toggle/select)","y":[{"key":"<scalar result>","label"}],"x_label","y_label"}  -- re-runs compute across that param's range and marks the current value: shows cause and effect.
   {"type":"curve","title","x":"<array key>" (a continuous quantity; for values at separate indices such as dimensions or items use bars),"y":[{"key","label"}],"marker_x":"<scalar key, same units as x>"?,"marker_y":["<scalar key>"]?,"x_label","y_label"}
   {"type":"svg","id":"v1","title","code":"function draw(p, r) { return '<svg viewBox=...>...</svg>'; }"}  -- only for a schematic no other widget can show; plain SVG string, no scripts/links.
   Any view may have "caption" (one sentence: what to notice). Labels may use $inline LaTeX$ except x_label/y_label (plain text).
-"explorations": exactly 2, each {"title","preset":{param_id: value},"change","observe","why"}. preset = complete values for the params it sets (shapes must match). "change" = what to do with which control; "observe" = which number/visual changes and how (cite actual values your compute gives); "why" = mechanism-level reason. Cover the scenarios named in the brief.
+"explorations": exactly 2, each {"title","preset":{param_id: value},"change","observe","why"}. preset = complete values for the params it sets (shapes must match). "change" = what to do with which control; "observe" = which number/visual changes and how (cite actual values your compute gives at the preset; for a value at any other setting, name that setting in the same sentence as "<control> = <value>"); "why" = mechanism-level reason. Cover the scenarios named in the brief.
 "misconception": {"title": "Common misunderstanding" | "Key assumption" | "Limitation", "text": str}  -- one specific, correct point.
 "checks": 3-6 executable checks: {"name", "test": "<JS boolean expression using p and r>", "show": "<JS expression for the number to display>", "params"?: {...}}.
   Without "params": an invariant that must hold for EVERY valid input (e.g. sums to 1 within 1e-9, output equals weighted sum, value >= 0). With "params": a fixed worked example whose expected value you can derive exactly by hand (e.g. a closed-form case from the brief such as certainty -> 0, uniform -> log n); avoid approximate hand-computed decimals. Invariants must truly hold for ALL inputs in the control ranges (including min/max/zero), so test only what the mechanism guarantees. Include every check the brief asks for. Tolerance 1e-6 or relative 1e-9.
@@ -55,9 +56,12 @@ def user_message(case: dict, excerpt: str | None, source_note: str) -> str:
                      "□ marks a symbol lost in PDF extraction, recover it from context or your knowledge):\n<<<\n"
                      + excerpt + "\n>>>")
     else:
-        parts.append(f"NO SOURCE TEXT AVAILABLE ({source_note}). Use your knowledge of this paper. "
-                     "Leave grounding.quotes empty. Only attribute statements to the paper that you are confident it makes, "
-                     "and cite the section/equation named in the focus.")
+        parts.append("NO SOURCE TEXT COULD BE RETRIEVED. Ground the explanation ONLY in the CASE brief. "
+                     "grounding.from_paper may contain only statements the brief itself makes about the paper "
+                     "(write them as 'The brief states that ...'); never add facts, numbers, quotes, or section/"
+                     "equation/algorithm numbers from memory. paper.title/authors/year only if the brief or URL states them, else ""; paper.section only as named in the brief; "
+                     "paper.equation '' unless the brief names it. grounding.quotes must be []. Present all formulas "
+                     "and examples as our illustration of the brief, and list that in our_simplifications.")
     parts.append("Return the JSON object now.")
     return "\n\n".join(parts)
 
