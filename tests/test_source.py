@@ -7,7 +7,7 @@ class SourceTests(unittest.TestCase):
     def test_html_removes_navigation_and_scripts(self):
         data = ("<html><nav>Ignore this navigation<meta name='x'><br>still ignored</nav>"
                 "<article><h2>Mechanism</h2>"
-                "<p>" + "A useful equation relates input and output. " * 4 + "</p>"
+                "<p>" + "A useful equation relates input and output. " * 10 + "</p>"
                 "<script>Ignore this script</script></article></html>").encode()
         document = _extract(data, "text/html", "https://example.org/paper")
         self.assertIn("Mechanism", document.text)
@@ -19,8 +19,14 @@ class SourceTests(unittest.TestCase):
         with self.assertRaises(SourceError):
             _extract(b"<html>Empty</html>", "text/html", "test")
 
+    def test_arxiv_math_alttext_kept(self):
+        data = ("<p>" + "Context words here. " * 20 + "</p><p>We compute <math alttext=\"\\sqrt{d_k}\"><mi>junk</mi></math> now.</p>").encode()
+        text = _extract(data, "text/html", "t").text
+        self.assertIn("$\\sqrt{d_k}$", text)
+        self.assertNotIn("junk", text)
+
     def test_excerpt_keeps_relevant_late_section(self):
-        text = "Introduction to the paper.\n" + ("Unrelated background material.\n" * 1200)
+        text = "Introduction to the paper.\n" + "x" * 800 + "\n" + ("Unrelated background material.\n" * 1200)
         text += "Entropy is the expected information, calculated from a distribution.\n"
         text += "More unrelated material.\n" * 1200
         result = select_excerpt(SourceDocument(text, "html", "test"), "Explain entropy")
