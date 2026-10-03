@@ -76,7 +76,7 @@ function evaluate(states) {
 }
 function numbersOver(states) {
   var out = [];
-  function walk(v) { if (typeof v === "number" && isFinite(v)) out.push(v); else if (Array.isArray(v)) v.forEach(walk);
+  function walk(v) { if (typeof v === "number" && isFinite(v)) out.push(v); else if (Array.isArray(v)) { if (v.length <= 12) v.forEach(walk); }
                      else if (v && typeof v === "object") for (var k in v) walk(v[k]); }
   states.forEach(function (s) { try { var st = normalizeShapes(Object.assign(defaults(), clone(s))); walk(st); walk(__explainer.compute(clone(st))); } catch (e) {} });
   return JSON.stringify(out);
@@ -150,6 +150,13 @@ def normalize_spec(spec: dict, rep: Report) -> dict:
                     and isinstance(p.get("max"), (int, float)) and not p["min"] <= p["default"] <= p["max"]:
                 p["default"] = min(max(p["default"], p["min"]), p["max"])
                 rep.fixes.append(f"clamped default of {p['id']}")
+    ex = spec.get("explorations")
+    if isinstance(ex, list) and len(ex) > 2:  # keep the first two complete ones instead of paying for a repair
+        complete = [e for e in ex if isinstance(e, dict) and e.get("preset")
+                    and all(isinstance(e.get(k), str) and e.get(k) for k in ("title", "change", "observe", "why"))]
+        if len(complete) >= 2:
+            spec["explorations"] = complete[:2]
+            rep.fixes.append(f"kept the first 2 of {len(ex)} explorations")
     for e in spec.get("explorations", []) or []:
         preset = e.get("preset") if isinstance(e, dict) else None
         if not isinstance(preset, dict):
@@ -215,9 +222,9 @@ def check_structure(spec: dict, rep: Report) -> None:
             rep.errors.append(f"view '{v.get('title')}' ({v.get('type')}) has an unknown view type")
         if v.get("type") == "sweep":
             target = next((q for q in spec["params"] if q.get("id") == v.get("x_param")), None)
-            if not target or target.get("type") not in ("number", "vector"):
+            if not target or target.get("type") not in ("number", "vector", "matrix"):
                 rep.errors.append(f"view '{v.get('title')}' (sweep) has x_param {v.get('x_param')!r}, which is not a "
-                                  "number or vector param")
+                                  "number, vector or matrix param (use x_index [row, col] for a matrix entry)")
     if len(spec["explorations"]) != 2:
         rep.errors.append(f"need exactly 2 explorations, got {len(spec['explorations'])}")
     for e in spec["explorations"]:
@@ -247,9 +254,33 @@ _CITE = re.compile(r"\b(Eqs?\.|Equations?|Algorithm|Theorem|Lemma|Definition|Pro
                    r"\s*((?:\(?\d+(?:\.\d+)?\)?\s*(?:[-–,]|and|&)?\s*)+)", re.I)
 
 
+def check_brief_citations(spec: dict, brief: str, rep: Report) -> None:
+    """Brief-only mode: any section/equation/algorithm/theorem/figure/table number the page cites must be named in
+    the brief, since nothing else about the paper is known."""
+    paper, g = spec.get("paper", {}), spec.get("grounding", {})
+    cited = " ".join([str(paper.get("section", "")), str(paper.get("equation", ""))]
+                     + [str(x) for x in g.get("from_paper", [])] + [str(e.get("caption", "")) for e in spec.get("equations", [])])
+    refs = [(k, n) for k, nums in _CITE.findall(cited) for n in re.findall(r"\d+(?:\.\d+)?", nums)]
+    refs += [("Section", n) for n in re.findall(r"\b(?:Section|Sec\.|§)\s*(\d+(?:\.\d+)*)", cited)]
+    missing = sorted({f"{k} {n}" for k, n in refs if not re.search(rf"(?<![\d.]){re.escape(n)}(?![\d])", brief)})
+    if missing:
+        rep.errors.append(f"citations {missing} are not named in the brief; the source text was not available, so "
+                          "cite only what the brief names and describe everything else without numbers")
+    if g.get("quotes"):
+        g["quotes"] = []
+        rep.fixes.append("removed quotes: no source text was available")
+    known = _name(brief)
+    for key in ("title", "authors", "year"):
+        value = str(paper.get(key) or "")
+        words = [w for w in re.findall(r"[A-Za-z0-9]{3,}", value)]
+        if value and (not words or sum(_name(w) in known for w in words) / len(words) < 0.6):
+            paper[key] = ""
+            rep.fixes.append(f"cleared paper.{key}: not stated in the brief or URL")
+
+
 def check_citations(spec: dict, excerpt: str | None, rep: Report) -> None:
     """Every numbered equation/algorithm/theorem/figure/table the page attributes to the paper must appear in the
-    source text we read. (Skipped when the source was unavailable.)"""
+    source text we read. (Brief-only mode uses check_brief_citations instead.)"""
     if not excerpt:
         return
     g, paper = spec.get("grounding", {}), spec.get("paper", {})
@@ -371,10 +402,16 @@ def check_view_shapes(spec: dict, r: dict, rep: Report) -> None:
             "number": _is_num(val),
             "numbers": isinstance(val, list) and bool(val) and all(_is_num(x) or x is None for x in val),
             "matrix": isinstance(val, list) and bool(val) and all(isinstance(row, list) for row in val),
-            "cells": isinstance(val, list) and all(not isinstance(x, (list, dict)) for x in val) or _is_num(val),
+            "cells": (isinstance(val, list) and all(not isinstance(x, dict) for x in val)) or _is_num(val),
+            "numbers_or_matrix": isinstance(val, list) and bool(val) and (
+                all(_is_num(x) or x is None for x in val)
+                or all(isinstance(row, list) and all(_is_num(x) or x is None for x in row) for row in val)),
+            "number_or_numbers": _is_num(val) or (isinstance(val, list) and bool(val) and all(_is_num(x) for x in val)),
         }[kind]
         if not ok:
             want = {"number": "a single number", "numbers": "a flat array of numbers",
+                    "numbers_or_matrix": "an array of numbers or an array of rows",
+                    "number_or_numbers": "a number or a flat array of numbers",
                     "matrix": "an array of rows", "cells": "a flat array of numbers/strings"}[kind]
             rep.errors.append(f"view '{v.get('title')}' ({v.get('type')}): key {key!r} must be {want}, "
                               f"but compute returns {json.dumps(val)[:80]}")
@@ -386,12 +423,12 @@ def check_view_shapes(spec: dict, r: dict, rep: Report) -> None:
             if series and all(_is_num(get(srs.get("key"))) for srs in series):
                 continue  # one bar per single-number key
             for srs in series:
-                need(v, srs.get("key"), "numbers")
+                need(v, srs.get("key"), "numbers_or_matrix")
         elif t == "heatmap":
-            need(v, v.get("value"), "matrix")
+            need(v, v.get("value"), "numbers_or_matrix")  # a flat array is drawn as one row
         elif t == "sweep":
             for y in v.get("y", []):
-                need(v, y.get("key"), "number")
+                need(v, y.get("key"), "number_or_numbers")
         elif t == "curve":
             need(v, v.get("x"), "numbers")
             for y in v.get("y", []):
@@ -421,8 +458,10 @@ def _numbers(text: str) -> list[tuple[str, float]]:
 def _supported(tok: str, x: float, pool: list[float]) -> bool:
     if abs(x) <= 10 and float(x).is_integer():
         return True  # counts, indices, small integers (n = 4, p_t = 1, ...)
-    decimals = len(tok.split(".")[1].split("e")[0]) if "." in tok else 0
-    tol = max(0.5 * 10 ** -decimals, 1e-9) + 0.011 * abs(x)
+    mantissa, _, exp = tok.lower().partition("e")
+    decimals = len(mantissa.split(".")[1]) if "." in mantissa else 0
+    scale = 10 ** int(exp.replace("−", "-")) if exp else 1  # 1.05e-5 is precise to 0.005e-5, not 0.005
+    tol = max(0.5 * 10 ** -decimals * scale, 1e-12) + 0.011 * abs(x)
     return any(abs(v - x) <= tol or abs(abs(v) - abs(x)) <= tol for v in pool)
 
 
@@ -432,43 +471,203 @@ def _round(v: Any) -> Any:
     return float(f"{v:.4g}") if isinstance(v, float) else v
 
 
+GREEK = {"α": "alpha", "β": "beta", "γ": "gamma", "δ": "delta", "ε": "epsilon", "ϵ": "epsilon", "θ": "theta",
+         "λ": "lambda", "μ": "mu", "σ": "sigma", "τ": "tau", "ρ": "rho", "η": "eta", "ω": "omega", "π": "pi",
+         "φ": "phi", "ϕ": "phi", "κ": "kappa", "ν": "nu", "ξ": "xi", "ζ": "zeta", "χ": "chi", "ψ": "psi"}
+
+
+def _name(s: str) -> str:
+    s = re.sub(r"\\(?:mathrm|text|operatorname|mathbf|mathit)\{([^}]*)\}", r"\1", str(s))
+    for g, n in GREEK.items():
+        s = s.replace(g, n)
+    return re.sub(r"[\\{}$\s_]", "", s).lower()
+
+
+def _aliases(spec: dict) -> dict[str, tuple[str, int | None]]:
+    """Names a sentence may use for a control: its id, symbol, LaTeX symbols in its label, Greek letters."""
+    out: dict[str, tuple[str, int | None]] = {}
+    for p in spec["params"]:
+        names = {p["id"], p.get("symbol") or ""} | set(re.findall(r"\$([^$]+)\$", str(p.get("label", ""))))
+        for n in filter(None, (_name(x) for x in names)):
+            out.setdefault(n, (p["id"], None))
+    return out
+
+
+_ASSIGN = re.compile(r"(?<![\w.])([A-Za-z][A-Za-z0-9_]*?)(?:_?\{?(\d+)\}?)?\s*(?:=|→|->|\bto\b)\s*(-?\d+(?:\.\d+)?(?:e-?\d+)?)")
+_SKIP_NUM = re.compile(r"^\s*(?:x\b|×|%|-?fold|times)")
+_REF_BEFORE = re.compile(r"(?:section|sec\.|eq\.|eqs\.|equation|figure|fig\.|table|algorithm|theorem|step|page|appendix)\s*\(?$", re.I)
+
+
+def _sentence_state(sentence: str, preset: dict, spec: dict, aliases: dict) -> dict:
+    """The control state a sentence talks about: the preset plus any 'name = value' settings it names."""
+    state = json.loads(json.dumps(preset))
+    text = sentence
+    for g, n in GREEK.items():
+        text = text.replace(g, n)
+    text = re.sub(r"\\(?:mathrm|text)\{([^}]*)\}", r"\1", text).replace("$", " ").replace("\\", "")
+    params = {p["id"]: p for p in spec["params"]}
+    low = text.lower()
+    for p in spec["params"]:
+        if p.get("type") != "toggle":
+            continue
+        words = {p["id"].lower()} | {w.lower() for w in re.findall(r"[A-Za-z]{4,}", re.sub(r"\$[^$]*\$", " ", str(p.get("label", ""))))}
+        stems = {w[:4] for w in words if w not in ("with", "show", "turn", "when", "from", "each", "into")}
+        for stem in stems:
+            off = re.search(rf"\b(?:off|disabled?|without|no)\b[^.;]{{0,25}}\b{stem}\w*|\b{stem}\w*\b[^.;]{{0,15}}\b(?:off|disabled|false)\b", low)
+            on = re.search(rf"\b(?:on|enabled?|with)\b[^.;]{{0,10}}\b{stem}\w*\b(?![^.;]{{0,15}}\boff\b)|\b{stem}\w*\b[^.;]{{0,15}}\b(?:on|enabled|true)\b", low)
+            if off:
+                state[p["id"]] = False
+                break
+            if on:
+                state[p["id"]] = True
+                break
+    for m in _ASSIGN.finditer(text):
+        name, idx, val = _name(m.group(1)), m.group(2), float(m.group(3))
+        target = aliases.get(name + (idx or "")) or aliases.get(name)
+        if not target:
+            continue
+        pid = target[0]
+        p = params[pid]
+        if p.get("type") == "vector" and idx and target is aliases.get(name):
+            vec = list(state.get(pid, p.get("default") or []))
+            k = int(idx) - 1
+            if 0 <= k < len(vec):
+                vec[k] = val
+                state[pid] = vec
+        elif p.get("type") == "number" and not idx:
+            state[pid] = val
+    return state
+
+
+def _claimed_numbers(sentence: str) -> list[tuple[str, float]]:
+    out = []
+    for m in NUM.finditer(sentence):
+        tok = m.group(0).replace("−", "-")
+        try:
+            x = float(tok)
+        except ValueError:
+            continue
+        if _SKIP_NUM.match(sentence[m.end():]) or _REF_BEFORE.search(sentence[:m.start()]):
+            continue
+        if x != 0 and abs(x) >= 10 and float(f"{abs(x):.0e}") == abs(x) and "." not in tok:
+            continue  # round powers of ten are scale words (100x, 1000), not computed claims
+        if "." in tok or "e" in tok.lower() or abs(x) > 10:
+            out.append((tok, x))
+    return out
+
+
 def check_exploration_numbers(spec: dict, ctx: Any, rep: Report) -> None:
-    """Accuracy: precise values an exploration tells the learner to observe must be reachable by compute()
-    from its preset (allowing the learner to move any one control, as 'change' instructs)."""
-    states: list[dict] = [{}]
-    for e in spec["explorations"]:
-        preset = e.get("preset") or {}
-        states.append(preset)
-        for p in spec["params"]:
-            if p.get("type") == "number":
-                lo, hi, step = p["min"], p["max"], p.get("step") or 0
-                n = min(41, int(round((hi - lo) / step)) + 1) if step else 41
-                states += [{**preset, p["id"]: lo + (hi - lo) * k / max(1, n - 1)} for k in range(n)]
-            elif p.get("type") == "toggle":
-                states.append({**preset, p["id"]: not preset.get(p["id"], p.get("default"))})
-            elif p.get("type") == "select":
-                states += [{**preset, p["id"]: o.get("value")} for o in p.get("options", [])]
-    try:
-        pool = json.loads(ctx.call("numbersOver", states, **JS_LIMITS))
-    except Exception:
-        return
-    pool += [x for _, x in _numbers(json.dumps(spec.get("equations", [])) + json.dumps(spec["params"]))]
+    """Accuracy: each number an exploration states must be what compute() returns in the state that sentence
+    describes (the preset plus any 'control = value' settings it names)."""
+    aliases = _aliases(spec)
+    constants = [x for _, x in _numbers(json.dumps(spec.get("equations", [])))]  # not slider ranges
+    checked = 0
     for i, e in enumerate(spec["explorations"]):
-        bad = [tok for tok, x in _numbers(e.get("observe", "")) + _numbers(e.get("why", ""))
-               if "." in tok and not _supported(tok, x, pool)]
+        preset = e.get("preset") or {}
+        bad, states_seen = [], []
+        for field in ("observe", "why"):
+            for sentence in re.split(r"(?<=[.;!?])\s+", str(e.get(field, ""))):
+                plain = re.sub(r"\$([^$]*)\$", lambda m: " " + re.sub(r"[_^](\{[^{}]*\}|\\?\w)", " ", m.group(1)) + " ", sentence)
+                plain = re.sub(r"\\[A-Za-z]+", " ", plain)
+                claims = _claimed_numbers(plain)
+                if not claims:
+                    continue
+                state = _sentence_state(sentence, preset, spec, aliases)
+                try:
+                    pool = json.loads(ctx.call("numbersOver", [{}, preset, state], **JS_LIMITS))  # defaults too: "from X to Y"
+                except Exception:
+                    continue
+                pool += constants + [x for _, x in _numbers(json.dumps(state))]
+                for tok, x in claims:
+                    checked += 1
+                    if not _supported(tok, x, pool):
+                        bad.append(tok)
+                        if state != preset and state not in states_seen:
+                            states_seen.append(state)
         if bad:
             try:
-                actual = json.loads(ctx.call("resultOf", e.get("preset") or {}, **JS_LIMITS))
+                actual = json.loads(ctx.call("resultOf", preset, **JS_LIMITS))
             except Exception:
                 actual = {}
             shown = {k: _round(v) for k, v in actual.items() if isinstance(v, (int, float, list)) and not isinstance(v, bool)
                      and len(json.dumps(v)) < 300}
-            rep.errors.append(f"exploration {i + 1} ('{e.get('title')}') states {bad}, but compute() does not produce "
-                              f"these values from its preset. compute() at this preset actually returns "
-                              f"{json.dumps(shown)[:900]}. Rewrite 'observe'/'why' using these values, and if the "
-                              "preset does not demonstrate the claim, fix the preset")
-    rep.stats["exploration_numbers_checked"] = sum(
-        len([t for t, _ in _numbers(e.get("observe", "") + " " + e.get("why", "")) if "." in t]) for e in spec["explorations"])
+            other = ""
+            for st in states_seen[:2]:
+                try:
+                    res = json.loads(ctx.call("resultOf", st, **JS_LIMITS))
+                    diff = {k: v for k, v in st.items() if preset.get(k) != v}
+                    other += (f" With {json.dumps(diff)} it returns "
+                              + json.dumps({k: _round(v) for k, v in res.items() if isinstance(v, (int, float, list))
+                                            and not isinstance(v, bool) and len(json.dumps(v)) < 300})[:600] + ".")
+                except Exception:
+                    pass
+            rep.errors.append(f"exploration {i + 1} ('{e.get('title')}') states {bad}, which compute() does not return "
+                              f"in the state each sentence describes. At the preset compute() returns "
+                              f"{json.dumps(shown)[:800]}.{other} Restate the numbers from these results. If the preset "
+                              "does not show the scenario the exploration describes (e.g. 'equal scores'), change the "
+                              "preset so it does. Name any other setting in the same sentence as '<control> = <value>' or "
+                              "'with <toggle> off'")
+    rep.stats["exploration_numbers_checked"] = checked
+
+
+_DIM_WORDS = re.compile(r"dimension|dim\b|size|length|number of|count|\bd_|^d[a-z]?$|^n[a-z]?$", re.I)
+_UNIT_WORDS = re.compile(r"\bbase\b|unit|bits|nats|dits|degrees|radians|decibel|\bdb\b|log", re.I)
+
+
+def check_control_consistency(spec: dict, ctx: Any, rep: Report) -> None:
+    """Scientific consistency: a control must not contradict the inputs it describes.
+    1. A number control for a dimension that is fixed by a vector/matrix shape (e.g. a d_k slider while Q has
+       3 columns) must instead be derived in compute or be the size control of that vector/matrix.
+    2. No control may switch units (log base, degrees/radians, dB): fixed labels would become wrong."""
+    params = spec["params"]
+    size_refs = {q.get(k) for q in params for k in ("length", "rows", "cols") if isinstance(q.get(k), str)}
+    shapes = set()
+    for q in params:
+        d = q.get("default")
+        if q.get("type") == "vector" and isinstance(d, list):
+            shapes.add(len(d))
+        if q.get("type") == "matrix" and isinstance(d, list) and d and isinstance(d[0], list):
+            shapes.update({len(d), len(d[0])})
+    for p in params:
+        text = f"{p['id']} {p.get('label', '')}"
+        if (p.get("type") == "number" and p["id"] not in size_refs and _DIM_WORDS.search(text)
+                and isinstance(p.get("default"), (int, float)) and p["default"] in shapes):
+            rep.errors.append(f"control '{p['id']}' sets a dimension ({p['default']}) that is already fixed by the shape of a "
+                              "vector/matrix input; derive it inside compute from that shape (e.g. dk = Q[0].length), or "
+                              "make it that input's rows/cols/length control, so the formula and the data always agree")
+    for p in params:
+        if p.get("type") not in ("select", "toggle"):
+            continue
+        text = f"{p['id']} {p.get('label', '')} " + " ".join(str(o.get("label", "")) for o in p.get("options", []) or [])
+        if not _UNIT_WORDS.search(text):
+            continue
+        values = [o.get("value") for o in p.get("options", [])] if p["type"] == "select" else [True, False]
+        try:
+            outs = {json.dumps(json.loads(ctx.call("resultOf", {p["id"]: v}, **JS_LIMITS))) for v in values}
+        except Exception:
+            continue
+        if len(outs) > 1:
+            rep.errors.append(f"control '{p['id']}' switches the units of the results (e.g. bits/nats); chart labels, "
+                              "titles and text would then be wrong. Remove it and report results in the units the "
+                              "brief and paper use")
+
+
+def check_presets_differ(spec: dict, ctx: Any, rep: Report) -> None:
+    try:
+        results = [ctx.call("resultOf", e.get("preset") or {}, **JS_LIMITS) for e in spec["explorations"]]
+    except Exception:
+        return
+    if len(results) == 2 and results[0] == results[1]:
+        rep.errors.append("both explorations' presets produce identical results; each preset must set up the scenario "
+                          "its exploration describes (e.g. the second one a different value of the control it varies)")
+
+
+def check_tests_meaningful(spec: dict, rep: Report) -> None:
+    for c in spec.get("checks", []):
+        test = re.sub(r"\s+", "", str(c.get("test", "")))
+        if not re.search(r"\br(?:\.|\[)", test) or test.lower() in ("true", "1", "!0", "!!1"):
+            rep.errors.append(f"check '{c.get('name')}' does not test any computed result (r.<key>); "
+                              "every check must compare compute() outputs against an expected relation or value")
 
 
 def check_execution(spec: dict, rep: Report) -> None:
@@ -540,7 +739,7 @@ def check_execution(spec: dict, rep: Report) -> None:
         if v.get("type") != "sweep":
             continue
         p = next((q for q in spec["params"] if q.get("id") == v.get("x_param")
-                  and q.get("type") in ("number", "vector")), None)
+                  and q.get("type") in ("number", "vector", "matrix")), None)
         if p is None:
             continue
         lo = v.get("x_min", p.get("min", 0)); hi = v.get("x_max", p.get("max", 1))
@@ -552,6 +751,11 @@ def check_execution(spec: dict, rep: Report) -> None:
             if p["type"] == "vector":
                 vec = list(p["default"]); vec[min(len(vec) - 1, int(v.get("x_index") or 0))] = x
                 sweep_states.append({p["id"]: vec})
+            elif p["type"] == "matrix":
+                mat = json.loads(json.dumps(p["default"]))
+                i, j = (list(v.get("x_index")) + [0, 0])[:2] if isinstance(v.get("x_index"), list) else (0, 0)
+                mat[min(len(mat) - 1, int(i))][min(len(mat[0]) - 1, int(j))] = x
+                sweep_states.append({p["id"]: mat})
             else:
                 sweep_states.append({p["id"]: x})
     if sweep_states:
@@ -581,6 +785,8 @@ def check_execution(spec: dict, rep: Report) -> None:
                 rep.errors.append(f"view '{v.get('title')}' ({v.get('type')}) reads keys not returned by compute: {missing}")
         check_view_shapes(spec, json.loads(ctx.call("resultOf", {}, **JS_LIMITS)), rep)
         check_exploration_numbers(spec, ctx, rep)
+        check_presets_differ(spec, ctx, rep)
+        check_control_consistency(spec, ctx, rep)
         # Controls must matter: changing each one should change the result.
         effective = 0
         for p in spec["params"]:
@@ -624,13 +830,16 @@ def check_execution(spec: dict, rep: Report) -> None:
             rep.warnings.append(f"default inputs produce a warning: {base['warning']}")
 
 
-def validate(spec: dict, excerpt: str | None) -> Report:
+def validate(spec: dict, excerpt: str | None, brief: str | None = None) -> Report:
     rep = Report()
     normalize_spec(spec, rep)
     check_structure(spec, rep)
     if any(e.startswith(("missing or invalid field", "param ")) for e in rep.errors):
         return rep  # cannot build inputs for compute(); nothing executable to test yet
     check_grounding(spec, excerpt, rep)
+    check_tests_meaningful(spec, rep)
     check_citations(spec, excerpt, rep)
+    if excerpt is None and brief:
+        check_brief_citations(spec, brief, rep)
     check_execution(spec, rep)
     return rep
