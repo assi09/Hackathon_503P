@@ -1,0 +1,319 @@
+{
+ "plan": {
+  "concept": "Shannon's discrete entropy H = -Σ p_i log2 p_i as a measure of choice/uncertainty, computed over a small editable probability distribution.",
+  "learning_outcomes": [
+   "Compute H in bits from a probability vector and read each term -p_i log2 p_i as that outcome's contribution.",
+   "Verify H=0 for certainty and H=log2 n for n equally likely outcomes.",
+   "See that equalizing probabilities raises H and that zero-probability outcomes contribute 0 (0·log0=0)."
+  ],
+  "visual_strategy": "A pipeline shows raw weights -> normalized p_i -> per-outcome contributions -> total H; bars show p_i and contributions; a sweep over one probability shows the H curve with the current point marked.",
+  "misconception": "Entropy is not the number of outcomes; it is the average surprise, so 4 outcomes with p=(0.97,0.01,0.01,0.01) give far less than 2 bits."
+ },
+ "title": "Shannon Entropy: Measuring Choice and Uncertainty in Bits",
+ "paper": {
+  "title": "A Mathematical Theory of Communication",
+  "authors": "C. E. Shannon",
+  "year": "1948",
+  "section": "Section 6, Choice, Uncertainty and Entropy",
+  "equation": "H = -K Σ p_i log p_i (Theorem 2)"
+ },
+ "idea": "Given a set of possible events with known probabilities p_1,...,p_n, Shannon asks for a measure of how much 'choice' or uncertainty the selection involves. He requires continuity, monotonicity in n for equal probabilities, and consistency under decomposing a choice into successive choices; the unique such measure is H = -Σ p_i log p_i. With base-2 logarithms H is measured in bits.",
+ "why_it_matters": "H is the fundamental limit on how much a source can be compressed and how much information a symbol carries. It also quantifies uncertainty in any probabilistic model, from communication to machine learning.",
+ "equations": [
+  {
+   "latex": "H = -K \\sum_{i=1}^{n} p_i \\log p_i",
+   "caption": "Theorem 2: the only H satisfying Shannon's three requirements; K sets the unit."
+  },
+  {
+   "latex": "H = -\\sum_{i=1}^{n} p_i \\log_2 p_i",
+   "caption": "With K=1 and base-2 logs, H is in bits."
+  },
+  {
+   "latex": "H\\left(\\tfrac{1}{2},\\tfrac{1}{3},\\tfrac{1}{6}\\right) = H\\left(\\tfrac{1}{2},\\tfrac{1}{2}\\right) + \\tfrac{1}{2} H\\left(\\tfrac{2}{3},\\tfrac{1}{3}\\right)",
+   "caption": "Property 3 (Fig. 6): a choice split into successive choices gives the weighted sum."
+  }
+ ],
+ "symbols": [
+  {
+   "symbol": "n",
+   "meaning": "number of possible outcomes (events), a positive integer"
+  },
+  {
+   "symbol": "p_i",
+   "meaning": "probability of outcome i, with p_i ≥ 0 and Σ p_i = 1"
+  },
+  {
+   "symbol": "w_i",
+   "meaning": "raw nonnegative weight for outcome i; p_i = w_i / Σ w_j"
+  },
+  {
+   "symbol": "H",
+   "meaning": "entropy (choice/uncertainty) in bits, H ≥ 0"
+  },
+  {
+   "symbol": "K",
+   "meaning": "positive constant fixing the unit; K=1 with base-2 logs gives bits"
+  },
+  {
+   "symbol": "c_i",
+   "meaning": "contribution of outcome i, c_i = -p_i log2 p_i, so H = Σ c_i"
+  }
+ ],
+ "walkthrough": [
+  "Choose n outcomes and give each a raw weight w_i ≥ 0 (the controls).",
+  "Normalize: p_i = w_i / Σ_j w_j, so the p_i are a valid probability distribution summing to 1.",
+  "For each outcome compute its surprise -log2 p_i and its contribution c_i = -p_i log2 p_i (with 0·log0 = 0).",
+  "Sum the contributions: H = Σ c_i, the entropy in bits.",
+  "Check the extremes: if one p_i = 1 then H = 0; if all p_i = 1/n then H = log2 n."
+ ],
+ "params": [
+  {
+   "id": "n",
+   "label": "Number of outcomes n",
+   "type": "number",
+   "min": 2,
+   "max": 4,
+   "step": 1,
+   "default": 4
+  },
+  {
+   "id": "w",
+   "label": "Raw weights w_i",
+   "type": "vector",
+   "length": "n",
+   "default": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "min": 0,
+   "max": 10,
+   "step": 0.1,
+   "fill": 1,
+   "symbol": "w_i",
+   "labels": [
+    "w1",
+    "w2",
+    "w3",
+    "w4"
+   ]
+  }
+ ],
+ "compute": "function compute(p) {\n  var n = Math.max(2, Math.round(p.n));\n  var w = [];\n  for (var i = 0; i < n; i++) { var v = (p.w && p.w[i] != null) ? Number(p.w[i]) : 1; if (!isFinite(v) || v < 0) v = 0; w.push(v); }\n  var S = 0; for (var j = 0; j < n; j++) S += w[j];\n  var warning = null;\n  if (S <= 0) { warning = 'All weights are zero; falling back to a uniform distribution.'; for (var k = 0; k < n; k++) w[k] = 1; S = n; }\n  var probs = [], contrib = [], surprise = [];\n  for (var m = 0; m < n; m++) {\n    var pi = w[m] / S;\n    probs.push(pi);\n    if (pi > 0) { var s = -Math.log(pi) / Math.LN2; surprise.push(s); contrib.push(pi * s); }\n    else { surprise.push(null); contrib.push(0); }\n  }\n  var H = 0; for (var q = 0; q < n; q++) H += contrib[q];\n  var Hmax = Math.log(n) / Math.LN2;\n  var labels = []; for (var r = 0; r < n; r++) labels.push('p' + (r + 1));\n  var wlabels = []; for (var t = 0; t < n; t++) wlabels.push('w' + (t + 1));\n  var uniform = true; for (var u = 1; u < n; u++) if (Math.abs(probs[u] - probs[0]) > 1e-9) uniform = false;\n  return {\n    n: n, weights: w, weight_labels: wlabels, probs: probs, labels: labels,\n    contributions: contrib, surprises: surprise, H: H, Hmax: Hmax,\n    H_over_Hmax: Hmax > 0 ? H / Hmax : 0, uniform: uniform, warning: warning\n  };\n}",
+ "views": [
+  {
+   "type": "pipeline",
+   "title": "From weights to entropy",
+   "steps": [
+    {
+     "label": "Raw weights $w_i$",
+     "key": "weights",
+     "note": "what you set"
+    },
+    {
+     "label": "Probabilities $p_i = w_i/\\sum_j w_j$",
+     "key": "probs",
+     "note": "normalized, sum to 1"
+    },
+    {
+     "label": "Contributions $c_i = -p_i\\log_2 p_i$",
+     "key": "contributions",
+     "note": "each outcome's share"
+    },
+    {
+     "label": "Entropy $H = \\sum_i c_i$ (bits)",
+     "key": "H",
+     "note": "total choice/uncertainty"
+    }
+   ],
+   "caption": "Every stage is live: change a weight and watch the probabilities, contributions and total H move together."
+  },
+  {
+   "type": "bars",
+   "title": "Probability of each outcome",
+   "series": [
+    {
+     "key": "probs",
+     "label": "$p_i$"
+    }
+   ],
+   "labels": "labels",
+   "y_label": "probability",
+   "ymin": 0,
+   "ymax": 1,
+   "caption": "The distribution you are measuring; equal bars mean maximum uncertainty for this n."
+  },
+  {
+   "type": "bars",
+   "title": "Contribution of each outcome to H",
+   "series": [
+    {
+     "key": "contributions",
+     "label": "$-p_i\\log_2 p_i$ (bits)"
+    }
+   ],
+   "labels": "labels",
+   "y_label": "bits",
+   "ymin": 0,
+   "caption": "H is the sum of these bars; a near-certain outcome contributes almost nothing."
+  },
+  {
+   "type": "readout",
+   "title": "Entropy summary",
+   "items": [
+    {
+     "label": "Entropy $H$",
+     "key": "H",
+     "unit": "bits"
+    },
+    {
+     "label": "Maximum for this $n$: $\\log_2 n$",
+     "key": "Hmax",
+     "unit": "bits"
+    },
+    {
+     "label": "$H / \\log_2 n$",
+     "key": "H_over_Hmax"
+    },
+    {
+     "label": "All outcomes equally likely?",
+     "key": "uniform"
+    }
+   ],
+   "caption": "H=0 only when one outcome is certain; H=log2 n when all are equally likely."
+  },
+  {
+   "type": "sweep",
+   "title": "Entropy vs. one probability (others renormalized)",
+   "x_param": "w",
+   "x_index": 0,
+   "y": [
+    {
+     "key": "H",
+     "label": "$H$ (bits)"
+    }
+   ],
+   "x_label": "w1",
+   "y_label": "H (bits)",
+   "caption": "Sweeping w1 traces how H rises as the distribution equalizes and falls as one outcome dominates."
+  }
+ ],
+ "explorations": [
+  {
+   "title": "Certainty gives zero bits",
+   "preset": {
+    "n": 4,
+    "w": [
+     1,
+     0,
+     0,
+     0
+    ]
+   },
+   "change": "Set w1 = 1 and all other weights to 0.",
+   "observe": "p = (1,0,0,0), contributions = (0,0,0,0) and H = 0 bits, while log2 n = 2 bits.",
+   "why": "If one outcome is certain there is no choice; Shannon's property 1 says H=0 iff all p_i but one are zero, and 0·log0 is taken as 0."
+  },
+  {
+   "title": "Four equally likely outcomes give two bits",
+   "preset": {
+    "n": 4,
+    "w": [
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   "change": "Set all four weights equal (e.g. 1).",
+   "observe": "p = (0.25,0.25,0.25,0.25), each contribution = 0.5 bits, and H = 2.0 bits = log2 4.",
+   "why": "Property 2: for fixed n, H is maximized and equals log n when all p_i = 1/n — the most uncertain situation."
+  }
+ ],
+ "misconception": {
+  "title": "Common misunderstanding",
+  "text": "Entropy is not simply the number of outcomes. With n=4 but p=(0.97,0.01,0.01,0.01), H ≈ 0.24 bits, far below log2 4 = 2 bits, because the outcome is almost predictable. Only when the outcomes are equally likely does H reach log2 n."
+ },
+ "checks": [
+  {
+   "name": "Probabilities sum to 1",
+   "test": "Math.abs(r.probs.reduce(function(a,b){return a+b;},0) - 1) < 1e-9",
+   "show": "r.probs.reduce(function(a,b){return a+b;},0)",
+   "id": "c1"
+  },
+  {
+   "name": "H equals sum of contributions",
+   "test": "Math.abs(r.H - r.contributions.reduce(function(a,b){return a+b;},0)) < 1e-9",
+   "show": "r.H",
+   "id": "c2"
+  },
+  {
+   "name": "H is nonnegative",
+   "test": "r.H >= -1e-12",
+   "show": "r.H",
+   "id": "c3"
+  },
+  {
+   "name": "Certainty gives 0 bits",
+   "test": "Math.abs(r.H) < 1e-9",
+   "show": "r.H",
+   "params": {
+    "n": 4,
+    "w": [
+     1,
+     0,
+     0,
+     0
+    ]
+   },
+   "id": "c4"
+  },
+  {
+   "name": "Four equally likely outcomes give 2 bits",
+   "test": "Math.abs(r.H - 2) < 1e-9",
+   "show": "r.H",
+   "params": {
+    "n": 4,
+    "w": [
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   "id": "c5"
+  },
+  {
+   "name": "Zero-probability outcome contributes 0",
+   "test": "r.contributions[1] === 0 && r.surprises[1] === null",
+   "show": "r.contributions[1]",
+   "params": {
+    "n": 4,
+    "w": [
+     1,
+     0,
+     0,
+     0
+    ]
+   },
+   "id": "c6"
+  }
+ ],
+ "grounding": {
+  "from_paper": [
+   "Theorem 2: the only H satisfying continuity, monotonicity in n for equal probabilities, and the decomposition property is H = -K Σ p_i log p_i (Section 6).",
+   "Property 1: H = 0 if and only if all the p_i but one are zero, this one having the value unity (Section 6).",
+   "Property 2: for a given n, H is a maximum and equal to log n when all the p_i are equal (Section 6).",
+   "With base-2 logarithms H represents bits per symbol (Section 7)."
+  ],
+  "our_simplifications": [
+   "We restrict n to 2–4 outcomes and use raw weights w_i that are normalized to p_i, so the learner can never enter an invalid distribution.",
+   "We use base-2 logarithms and K=1 throughout, so H is always in bits.",
+   "The sweep view varies only w1 while holding the other weights fixed, then renormalizes."
+  ],
+  "quotes": [
+   "Can we ﬁnd a measure of how much “choice” is involved in the selection of the event or of how uncertain we are of the outcome?"
+  ]
+ }
+}
