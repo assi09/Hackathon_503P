@@ -42,6 +42,22 @@ event per step) and `out/spec.json` (the generated explanation spec, for inspect
 
 No other services, plugins or APIs are used.
 
+### How source access works
+
+The agent reads the paper from `source_url`, the only place the input names it. Its behaviour depends on whether
+that URL is reachable from the machine running `agent.py`:
+
+| Environment | What happens | Exit code | How to see it in `out/trace.jsonl` |
+|---|---|---|---|
+| `source_url` reachable (our development machines, with normal internet) | The paper is downloaded and parsed locally; the relevant section becomes the excerpt that grounds the page, and quotes and citations are verified against it. | `0` (`2` if checks still fail after repairs) | `"stage": "source"`, `"result": "ok"`, with `origin`, `format`, `excerpt_chars` and `focus_relevance` |
+| Only OpenRouter reachable | The download fails within 6 seconds and nothing else is attempted. The page is built from the brief alone: a visible banner, no quotes, and nothing attributed to the paper beyond what the brief states. | `1` | `"stage": "source"`, `"result": "unavailable"`, with the network error |
+
+In both cases every model call goes only to OpenRouter. The agent does not use OpenRouter plugins or any other
+service to fetch the paper.
+
+All results reported below were produced on machines where `source_url` was reachable, except the Kalman-filter
+practice case, whose link is dead and which therefore exercises the brief-only path.
+
 ## What we built
 
 The model never writes HTML. It writes a compact JSON **spec**: the explanation text, typed controls, a pure
