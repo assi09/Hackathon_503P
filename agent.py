@@ -18,15 +18,19 @@ import time
 from pathlib import Path
 from typing import Any
 
+from guard import start_watchdog
 from llm import Budget, BudgetError, LLMError, OpenRouter, parse_json
 from page import render_page
 from prompts import REPAIR_SYSTEM, SYSTEM, continue_message, repair_message, user_message
-from source import SourceError, load_source, select_excerpt
+from source import SourceError, load_source, relevance, select_excerpt
 from validate import Report, validate
 
 MAX_REPAIRS = 2
+MIN_RELEVANCE = 0.35  # share of focus key terms that must appear in the fetched text
+FIELD_LIMITS = {"source_url": 2_000, "focus": 4_000, "audience": 600}  # bounds prompt tokens for any input
+WATCHDOG_SECONDS = 570  # the case limit is 600 s
 REPAIRABLE = ("params", "compute", "views", "explorations", "checks", "equations", "symbols", "grounding",
-              "misconception")
+              "misconception", "paper")
 REQUIRED = ("title", "idea", "why_it_matters", "equations", "symbols", "params", "compute", "views", "explorations",
             "misconception", "checks", "grounding")
 
@@ -47,7 +51,9 @@ def load_case(path: Path) -> dict[str, str]:
         value = data.get(name)
         if not isinstance(value, str) or not value.strip():
             raise CaseError(f"{name} must be a nonempty string")
-        case[name] = value.strip()
+        case[name] = value.strip()[:FIELD_LIMITS[name]]
+        if len(value.strip()) > FIELD_LIMITS[name]:
+            case.setdefault("_truncated", []).append(name)
     return case
 
 
@@ -181,6 +187,19 @@ def degrade(spec: dict, rep: Report) -> dict:
     failing_views = {m.group(1) for e in rep.errors for m in [re.match(r"view '(.+?)' \(", e)] if m}
     if failing_views:
         spec["views"] = [v for v in spec["views"] if v.get("title") not in failing_views]
+    for e_msg in rep.errors:  # explorations whose stated numbers compute() does not produce
+        m = re.match(r"exploration (\d+) \(.*?\) states (\[.*?\]), but", e_msg)
+        if not m or not isinstance(spec.get("explorations"), list):
+            continue
+        idx, tokens = int(m.group(1)) - 1, re.findall(r"'([^']+)'", m.group(2))
+        if 0 <= idx < len(spec["explorations"]):
+            ex = spec["explorations"][idx]
+            for field in ("observe", "why"):
+                sentences = re.split(r"(?<=[.!?])\s+", str(ex.get(field, "")))
+                kept = [x for x in sentences if not any(t in x for t in tokens)]
+                if len(kept) < len(sentences):
+                    ex[field] = " ".join(kept) or ("Watch how the computed values in the views respond."
+                                                    if field == "observe" else ex.get(field, ""))
     if isinstance(spec.get("explorations"), list):
         good = [e for e in spec["explorations"] if isinstance(e, dict) and isinstance(e.get("preset"), dict)
                 and all(isinstance(e.get(k), str) for k in ("title", "change", "observe", "why"))]
@@ -208,18 +227,26 @@ def main(argv: list[str] | None = None) -> int:
     trace = Trace(args.output / "trace.jsonl", started)
     budget = Budget(started=started)
     try:
+        start_watchdog(WATCHDOG_SECONDS, lambda: trace.record(
+            "run", "finish", "failed", error=f"watchdog: no result within {WATCHDOG_SECONDS}s, exiting",
+            requests=budget.requests, prompt_tokens=budget.prompt_tokens, completion_tokens=budget.completion_tokens))
         case = load_case(args.input)
-        trace.record("input", "validate case", "ok", **case)
+        truncated = case.pop("_truncated", [])
+        trace.record("input", "validate case", "ok", **case, **({"truncated_fields": truncated} if truncated else {}))
         load_dotenv()
 
         # 1. Source: fetch quickly; the assessment network may only allow OpenRouter.
         excerpt, source_note = None, ""
         try:
             doc = load_source(case["source_url"])
+            score = relevance(doc, case["focus"])
+            if score < MIN_RELEVANCE:
+                raise SourceError(f"fetched text does not match the focus (only {score:.0%} of its key terms "
+                                  "appear); likely a login, paywall or wrong page")
             excerpt = select_excerpt(doc, case["focus"])
             source_note = f"Explanation grounded in text extracted from the source ({doc.format})."
             trace.record("source", "fetch and select excerpt", "ok", origin=doc.origin, format=doc.format,
-                         document_chars=len(doc.text), excerpt_chars=len(excerpt))
+                         document_chars=len(doc.text), excerpt_chars=len(excerpt), focus_relevance=round(score, 2))
         except SourceError as exc:
             source_note = ("The source could not be downloaded during generation, so this explanation relies on "
                            "the brief and the model's knowledge of the paper; verify details against the original.")
